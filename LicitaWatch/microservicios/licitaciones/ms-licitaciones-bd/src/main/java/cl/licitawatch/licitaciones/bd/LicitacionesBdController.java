@@ -21,10 +21,12 @@ public class LicitacionesBdController {
     /** Fila de licitacion con el nombre de sus catálogos, más el n.º de postulaciones y la Pyme con la postulación aprobada (si hay). */
     public record LicFila(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                           Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
-                          Instant createdAt, long postulantes, Long pymeAdjudicadaId) {}
+                          Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb) {}
+    /** Documento complementario con su contenido (data URL guardado en archivo_url); contenido null si se publicó sin archivo real. */
+    public record ArchivoFila(String nombre, String tipo, String contenido) {}
     public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt) {}
     public record NuevaLic(Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
-                           Integer maxPostulantes, String imagenUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre) {}
+                           Integer maxPostulantes, String imagenUrl, String archivoNombre, String tipoArchivo, String archivoContenido, LocalDate fechaCierre) {}
     public record NuevaPost(Long licitacionId, Long pymeId, String mensaje) {}
     public record Estado(String estado) {}
 
@@ -38,9 +40,12 @@ public class LicitacionesBdController {
         Long adjudicada = null;
         if ("Adjudicada".equals(l.getEstado().getNombre()))
             adjudicada = posts.findByLicitacionId(l.getId()).stream().filter(p -> "Aprobada".equals(p.getEstado().getNombre())).map(Postulacion::getPymeId).findFirst().orElse(null);
+        // El contenido del archivo no viaja en las listas: solo su tamaño; se pide aparte con /archivo.
+        String url = l.getArchivoUrl(); boolean conContenido = url != null && url.startsWith("data:");
+        Integer kb = conContenido ? Math.max(1, (int) ((url.length() - url.indexOf(',') - 1) * 3L / 4 / 1024)) : null;
         return new LicFila(l.getId(), l.getLicitadorId(), l.getTitulo(), l.getDescripcion(), l.getRubroId(), l.getRegionId(), aLong(l.getPresupuestoMin()), aLong(l.getPresupuestoMax()),
-                l.getMaxPostulantes(), l.getImagenUrl(), l.getArchivoUrl(), l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
-                l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada);
+                l.getMaxPostulantes(), l.getImagenUrl(), conContenido ? null : url, l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
+                l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada, kb);
     }
     private static PostFila fila(Postulacion p) { return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt()); }
     private List<LicFila> filas(Collection<Licitacion> ls) { return ls.stream().map(this::fila).toList(); }
@@ -68,6 +73,14 @@ public class LicitacionesBdController {
 
     @GetMapping("/licitaciones/{id}") public LicFila obtener(@PathVariable long id) { return fila(lic(id)); }
 
+    @GetMapping("/licitaciones/{id}/archivo")
+    public ArchivoFila archivo(@PathVariable long id) {
+        Licitacion l = lic(id);
+        if (l.getArchivoNombre() == null) throw ApiException.noEncontrado("La licitación no tiene documento adjunto");
+        String url = l.getArchivoUrl();
+        return new ArchivoFila(l.getArchivoNombre(), l.getTipoArchivo() == null ? "Otro" : l.getTipoArchivo().getNombre(), url != null && url.startsWith("data:") ? url : null);
+    }
+
     /** Nueva licitación en estado 'Abierta'. El ER guarda un documento complementario opcional (archivo_url / archivo_nombre / tipo_archivo_id). */
     @PostMapping("/licitaciones") @Transactional
     public LicFila crear(@RequestBody NuevaLic d) {
@@ -76,7 +89,8 @@ public class LicitacionesBdController {
         l.setPresupuestoMin(aDec(d.presupuestoMin())); l.setPresupuestoMax(aDec(d.presupuestoMax())); l.setMaxPostulantes(d.maxPostulantes()); l.setImagenUrl(d.imagenUrl());
         l.setFechaCierre(d.fechaCierre()); l.setEstado(el("Abierta"));
         if (d.archivoNombre() != null) {
-            l.setArchivoNombre(d.archivoNombre()); l.setArchivoUrl("/archivos/" + d.archivoNombre());
+            // archivo_url guarda el archivo como data URL (base64): el ER no tiene otra columna para el contenido.
+            l.setArchivoNombre(d.archivoNombre()); l.setArchivoUrl(d.archivoContenido() != null ? d.archivoContenido() : "/archivos/" + d.archivoNombre());
             l.setTipoArchivo(tipos.findByNombre(d.tipoArchivo() == null ? "Otro" : d.tipoArchivo()).orElseGet(() -> tipos.findByNombre("Otro").orElse(null)));
         }
         return fila(lics.save(l));

@@ -29,9 +29,11 @@ public class LicitacionService {
     // Filas tal como las entrega la capa BD.
     record Lic(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
-               Instant createdAt, long postulantes, Long pymeAdjudicadaId) {}
+               Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb) {}
     record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt) {}
 
+    /** 8 MB de archivo ≈ 11,2 millones de caracteres en base64 (más el encabezado del data URL). */
+    private static final int MAX_ARCHIVO_B64 = 11_200_200;
     private static final Logger log = LoggerFactory.getLogger(LicitacionService.class);
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private final InternalClient interno;
@@ -75,7 +77,7 @@ public class LicitacionService {
     private static String estadoEfectivo(Lic l) { return "Abierta".equals(l.estado()) && l.fechaCierre().isBefore(LocalDate.now()) ? "Cerrada" : l.estado(); }
 
     private LicitacionDto dto(Lic l, Ctx c) {
-        List<DocumentoDto> docs = l.archivoNombre() == null ? List.of() : List.of(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), 0));
+        List<DocumentoDto> docs = l.archivoNombre() == null ? List.of() : List.of(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), l.archivoKb() == null ? 0 : l.archivoKb(), null));
         return new LicitacionDto(l.id(), l.licitadorId(), c.nombre(l.licitadorId()), l.titulo(), l.descripcion(), l.rubroId(), l.regionId(), l.presupuestoMin(),
                 l.presupuestoMax(), l.maxPostulantes(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId());
     }
@@ -106,11 +108,16 @@ public class LicitacionService {
         if (d.presupuestoMin() != null && d.presupuestoMax() != null && d.presupuestoMin() > d.presupuestoMax()) throw ApiException.invalido("El presupuesto mínimo no puede superar al máximo");
         // El ER guarda un documento complementario opcional: se toma el primero.
         DocumentoDto doc = d.documentos() == null || d.documentos().isEmpty() ? null : d.documentos().get(0);
+        if (doc != null && doc.contenido() != null) {
+            if (!doc.contenido().startsWith("data:") || !doc.contenido().contains(";base64,")) throw ApiException.invalido("El documento adjunto no es válido");
+            if (doc.contenido().length() > MAX_ARCHIVO_B64) throw ApiException.invalido("El documento no puede superar los 8 MB");
+        }
         Map<String, Object> nueva = new HashMap<>();
         nueva.put("licitadorId", licitadorId); nueva.put("titulo", d.titulo().trim()); nueva.put("descripcion", d.descripcion().trim());
         nueva.put("rubroId", d.rubroId()); nueva.put("regionId", d.regionId()); nueva.put("presupuestoMin", d.presupuestoMin()); nueva.put("presupuestoMax", d.presupuestoMax());
         nueva.put("maxPostulantes", d.maxPostulantes()); nueva.put("imagenUrl", d.imagenUrl()); nueva.put("fechaCierre", cierre);
         nueva.put("archivoNombre", doc == null ? null : doc.nombre()); nueva.put("tipoArchivo", doc == null ? null : doc.tipo());
+        nueva.put("archivoContenido", doc == null ? null : doc.contenido());
         Lic l = interno.post(urlBd + "/bd/licitaciones", nueva, Lic.class);
         interno.notificar(urlNotif, licitadorId, "Licitación publicada", "Licitación publicada", "Tu licitación \"" + l.titulo() + "\" ya es visible para las Pymes del rubro.", false);
         avisos.submit(() -> avisarPymesDelRubro(l));
@@ -169,6 +176,13 @@ public class LicitacionService {
         return dtos(lics(f.toString())).stream().filter(x -> estado == null || estado.isBlank() || estado.equals(x.estado())).toList();
     }
     public LicitacionDto obtener(long id) { return dto(lic(id), new Ctx()); }
+
+    /** Documento adjunto para ver o descargar desde la plataforma (Licitador, Pyme o Admin con sesión). */
+    public ArchivoDto documento(long id) {
+        ArchivoDto a = interno.get(urlBd + "/bd/licitaciones/" + id + "/archivo", ArchivoDto.class);
+        if (a.contenido() == null) throw ApiException.noEncontrado("Este documento se publicó antes de que la plataforma guardara archivos, por lo que no está disponible.");
+        return a;
+    }
     public List<LicitacionDto> mias(long licitadorId) { return dtos(lics("?licitadorId=" + licitadorId)); }
     public List<LicitacionDto> todas() { return dtos(lics("")); }
 

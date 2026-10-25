@@ -18,7 +18,8 @@ import java.util.List;
 /** BFF de Licitaciones: valida la sesión, el rol y el formato de los datos de entrada, y delega en la capa BS. */
 @RestController
 public class LicitacionController {
-    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb) {}
+    /** contenido = data URL del archivo (solo al publicar). */
+    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb, String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
                                   Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
     public record Postular(String mensaje) {}
@@ -42,6 +43,7 @@ public class LicitacionController {
     }
     @GetMapping("/api/licitaciones/mias") public JsonNode mias(HttpServletRequest r) { Auth.exigir(r, "LICITADOR"); return get("/bs/licitaciones/mias"); }
     @GetMapping("/api/licitaciones/{id}") public JsonNode obtener(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id); }
+    @GetMapping("/api/licitaciones/{id}/documento") public JsonNode documento(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id + "/documento"); }
 
     @PostMapping("/api/licitaciones") @ResponseStatus(HttpStatus.CREATED)
     public JsonNode crear(HttpServletRequest r, @Valid @RequestBody NuevaLicitacion b) { Auth.exigir(r, "LICITADOR"); return post("/bs/licitaciones", b); }

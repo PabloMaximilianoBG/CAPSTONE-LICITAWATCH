@@ -6,7 +6,9 @@ import java.util.List;
 
 public final class Dto {
     private Dto() {}
-    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb) {}
+    /** contenido = data URL del archivo; solo viene al publicar (en las respuestas va null y se pide con /documento). */
+    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb, String contenido) {}
+    public record ArchivoDto(String nombre, String tipo, String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
                                   Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
     public record LicitacionDto(Long id, Long licitadorId, String licitadorNombre, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin,

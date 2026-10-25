@@ -85,6 +85,15 @@ export interface DocumentoLicitacion {
   nombre: string
   tipo: 'PDF' | 'DOCX' | 'XLSX' | 'Otro'
   tamanoKb: number
+  /** Data URL del archivo: solo se envía al publicar; para verlo o descargarlo se usa documentoLicitacion(). */
+  contenido?: string
+}
+
+/** Documento adjunto con su contenido (data URL) para verlo en la plataforma o descargarlo. */
+export interface ArchivoLicitacion {
+  nombre: string
+  tipo: DocumentoLicitacion['tipo']
+  contenido: string
 }
 
 export interface Licitacion {
@@ -334,6 +343,8 @@ export interface Api {
   // Licitaciones
   licitaciones(f?: FiltroLicitaciones): Promise<Licitacion[]>
   licitacion(id: number): Promise<Licitacion>
+  /** Documento adjunto de la licitación (cualquier usuario con sesión: Licitador, Pyme o Admin). */
+  documentoLicitacion(id: number): Promise<ArchivoLicitacion>
   misLicitaciones(): Promise<Licitacion[]>
   crearLicitacion(d: NuevaLicitacion): Promise<Licitacion>
   cerrarLicitacion(id: number): Promise<Licitacion>

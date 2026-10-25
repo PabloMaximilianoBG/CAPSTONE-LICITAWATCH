@@ -41,7 +41,7 @@ export function Assistant() {
           {msgs.map((m, i) => (
             <div key={i} className={`bubble ${m.rol === 'usuario' ? 'me' : 'other'}`}>
               {m.rol === 'asistente' && <span className="bot-ic"><Icon name="sparkles" size={16} /></span>}
-              <p>{m.texto}</p>
+              <p style={{ whiteSpace: 'pre-line' }}>{m.texto}</p>
               {m.licitaciones && m.licitaciones.length > 0 && (
                 <div className="bot-results">{m.licitaciones.map((l) => (
                   <Link key={l.id} to={`/app/licitacion/${l.id}`} className="bot-result"><b>{l.titulo}</b><small>{l.licitadorNombre} · {rangoPresupuesto(l.presupuestoMin, l.presupuestoMax)}</small></Link>

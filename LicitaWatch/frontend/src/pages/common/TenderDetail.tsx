@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../../api'
 import { ApiError } from '../../api/errors'
 import type { Plan, Postulacion } from '../../api/types'
@@ -25,6 +25,25 @@ export function TenderDetail({ id }: { id: number }) {
   const [confirmar, setConfirmar] = useState<{ tipo: 'adjudicar' | 'cerrar' | 'eliminar'; p?: Postulacion } | null>(null)
   const [limite, setLimite] = useState(false)   // pop-up: alcanzó las postulaciones del mes
   const [premium, setPremium] = useState<Plan | null>(null)
+  const [cargandoDoc, setCargandoDoc] = useState<'ver' | 'descargar' | null>(null)
+  const [visor, setVisor] = useState<{ nombre: string; url: string; mime: string } | null>(null)
+  useEffect(() => () => { if (visor) URL.revokeObjectURL(visor.url) }, [visor])
+
+  /** Pide el archivo (con la sesión) y lo muestra en la plataforma o lo descarga. */
+  const abrirDocumento = async (modo: 'ver' | 'descargar') => {
+    setCargandoDoc(modo)
+    try {
+      const a = await api.documentoLicitacion(id)
+      const blob = await (await fetch(a.contenido)).blob()
+      const url = URL.createObjectURL(blob)
+      if (modo === 'descargar') {
+        const link = document.createElement('a')
+        link.href = url; link.download = a.nombre
+        document.body.appendChild(link); link.click(); link.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 10_000)
+      } else setVisor({ nombre: a.nombre, url, mime: blob.type })
+    } catch (e) { toast.error((e as Error).message) } finally { setCargandoDoc(null) }
+  }
 
   if (lic.loading) return <Cargando />
   if (!l) return <Card><EmptyState icon="alert" titulo="No encontramos esta licitación" texto={lic.error ?? undefined} accion={<Button onClick={() => navigate('/app')}>Volver al panel</Button>} /></Card>
@@ -100,7 +119,13 @@ export function TenderDetail({ id }: { id: number }) {
             {l.documentos.length === 0 ? <p className="muted-p">El Licitador no adjuntó documentos.</p> : (
               <ul className="doc-list">
                 {l.documentos.map((d) => (
-                  <li key={d.nombre}><span className="doc-ic"><Icon name="file" size={18} /></span><div><b>{d.nombre}</b><small>{d.tipo} · {d.tamanoKb} KB</small></div><Icon name="download" size={18} className="muted-ic" /></li>
+                  <li key={d.nombre}>
+                    <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
+                    <div className="doc-acciones">
+                      <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === 'ver'} disabled={!!cargandoDoc} onClick={() => abrirDocumento('ver')}>Ver</Button>
+                      <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === 'descargar'} disabled={!!cargandoDoc} onClick={() => abrirDocumento('descargar')}>Descargar</Button>
+                    </div>
+                  </li>
                 ))}
               </ul>
             )}
@@ -223,6 +248,15 @@ export function TenderDetail({ id }: { id: number }) {
           : confirmar?.tipo === 'eliminar'
             ? <p>Vas a eliminar <b>{l.titulo}</b>. Desaparecerá de LicitaWatch y no se puede recuperar. Esta acción no se puede deshacer.</p>
             : <p>La licitación <b>{l.titulo}</b> dejará de recibir postulaciones. Esta acción no se puede deshacer.</p>}
+      </Modal>
+
+      <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.nombre ?? 'Documento'} ancho={980}
+        pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button><Button icon="download" onClick={() => abrirDocumento('descargar')} loading={cargandoDoc === 'descargar'}>Descargar</Button></>}>
+        {visor && (visor.mime === 'application/pdf'
+          ? <iframe className="doc-visor" src={visor.url} title={visor.nombre} />
+          : visor.mime.startsWith('image/')
+            ? <img className="doc-visor-img" src={visor.url} alt={visor.nombre} />
+            : <EmptyState icon="file" titulo="Este formato no se puede previsualizar" texto="Los archivos Word y Excel no se muestran en el navegador. Descárgalo para abrirlo en tu computador." />)}
       </Modal>
     </div>
   )

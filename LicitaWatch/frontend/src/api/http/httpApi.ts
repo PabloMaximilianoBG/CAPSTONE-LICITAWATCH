@@ -71,6 +71,7 @@ export const httpApi: Api = {
 
   licitaciones: (f?: FiltroLicitaciones) => get('/api/licitaciones', { ...f }),
   licitacion: (id) => get(`/api/licitaciones/${id}`),
+  documentoLicitacion: (id) => get(`/api/licitaciones/${id}/documento`),
   misLicitaciones: () => get('/api/licitaciones/mias'),
   crearLicitacion: (d) => post('/api/licitaciones', d),
   cerrarLicitacion: (id) => post(`/api/licitaciones/${id}/cerrar`),

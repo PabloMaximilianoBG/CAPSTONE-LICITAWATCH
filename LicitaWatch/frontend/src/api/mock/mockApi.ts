@@ -89,6 +89,7 @@ function notificar(db: DB, usuarioId: number, tipo: TipoNotificacion, titulo: st
 function aLicitacion(db: DB, l: LicitacionDB): Licitacion {
   return {
     ...clon(l),
+    documentos: l.documentos.map(({ contenido: _c, ...d }) => d),   // el contenido se pide aparte, como en el backend
     licitadorNombre: nombreDe(db, l.licitadorId),
     postulantes: db.postulaciones.filter((p) => p.licitacionId === l.id).length,
   }
@@ -305,6 +306,14 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const l = db.licitaciones.find((x) => x.id === id)
     if (!l) throw new ApiError('La licitación no existe.', 404)
     return aLicitacion(db, l)
+  },
+  async documentoLicitacion(id) {
+    await delay(150)
+    const db = loadDb()
+    const d = db.licitaciones.find((x) => x.id === id)?.documentos[0]
+    if (!d) throw new ApiError('La licitación no tiene documento adjunto.', 404)
+    if (!d.contenido) throw new ApiError('Este documento es de ejemplo y no tiene archivo en el modo simulado.', 404)
+    return { nombre: d.nombre, tipo: d.tipo, contenido: d.contenido }
   },
   async misLicitaciones() {
     await delay()

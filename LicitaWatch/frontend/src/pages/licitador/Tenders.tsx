@@ -60,10 +60,15 @@ export function TenderForm() {
     r.onload = () => setImagen(String(r.result))
     r.readAsDataURL(f)
   }
+  // El ER guarda un documento por licitación (archivo_url): se sube el archivo real para que las Pymes lo vean o descarguen.
   const agregarDocs = (files: FileList | null) => {
-    if (!files) return
-    const nuevos: DocumentoLicitacion[] = Array.from(files).map((f) => ({ nombre: f.name, tipo: tipoArchivo(f.name), tamanoKb: Math.max(1, Math.round(f.size / 1024)) }))
-    setDocs((d) => [...d, ...nuevos].slice(0, 6))
+    const f = files?.[0]
+    if (!f) return
+    if (f.size > 8_000_000) { toast.error('El documento no puede superar los 8 MB.'); return }
+    const r = new FileReader()
+    r.onload = () => setDocs([{ nombre: f.name, tipo: tipoArchivo(f.name), tamanoKb: Math.max(1, Math.round(f.size / 1024)), contenido: String(r.result) }])
+    r.onerror = () => toast.error('No se pudo leer el documento.')
+    r.readAsDataURL(f)
   }
 
   const publicar = async () => {
@@ -114,15 +119,15 @@ export function TenderForm() {
         </div>
       </Card>
       <Card>
-        <CardHeader icon="paperclip" title="Imagen y documentos" subtitle="Opcional · hasta 6 documentos (PDF, DOCX, XLSX)" />
+        <CardHeader icon="paperclip" title="Imagen y documentos" subtitle="Opcional · 1 documento (PDF, DOCX o XLSX, hasta 8 MB)" />
         <div className="upload-row">
           <div className="upload" onClick={() => refImg.current?.click()}>
             {imagen ? <img src={imagen} alt="Imagen de la licitación" /> : <><Icon name="image" size={26} /><b>Imagen de portada</b><small>JPG o PNG, hasta 2 MB</small></>}
             <input ref={refImg} type="file" accept="image/*" hidden onChange={(e) => subirImagen(e.target.files?.[0])} />
           </div>
           <div className="upload upload-docs" onClick={() => refDoc.current?.click()}>
-            <Icon name="upload" size={26} /><b>Subir documentos</b><small>Bases técnicas, anexos, planos…</small>
-            <input ref={refDoc} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { agregarDocs(e.target.files); e.target.value = '' }} />
+            <Icon name="upload" size={26} /><b>{docs.length ? 'Cambiar documento' : 'Subir documento'}</b><small>Bases técnicas, contrato, anexos…</small>
+            <input ref={refDoc} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { agregarDocs(e.target.files); e.target.value = '' }} />
           </div>
         </div>
         {docs.length > 0 && (

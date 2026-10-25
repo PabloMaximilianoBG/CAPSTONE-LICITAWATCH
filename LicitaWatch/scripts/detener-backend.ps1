@@ -9,7 +9,9 @@ Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" | Where-Object { $_.Co
 }
 $pidFront = "$Raiz\logs\frontend.pid"
 if (Test-Path $pidFront) {
-  taskkill /PID (Get-Content $pidFront) /T /F 2>$null | Out-Null
-  Remove-Item $pidFront
+  # Si el PC se reinició el proceso ya no existe: se ignora el error de taskkill.
+  $idFront = Get-Content $pidFront -ErrorAction SilentlyContinue
+  if ($idFront -and (Get-Process -Id $idFront -ErrorAction SilentlyContinue)) { & cmd /c "taskkill /PID $idFront /T /F >nul 2>&1" }
+  Remove-Item $pidFront -Force -ErrorAction SilentlyContinue
 }
 if (-not $Silencioso -or $n) { "Detenidos $n procesos del backend." }

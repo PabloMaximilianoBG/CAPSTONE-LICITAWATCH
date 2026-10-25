@@ -12,6 +12,6 @@ lw:
     notificaciones: ${URL_NOTIFICACIONES_BS:http://localhost:8184}
     chat: ${URL_CHAT_BS:http://localhost:8185}
   groq:
-    api-key: ${GROQ_API_KEY:}            # vacío = respuestas por heurística local, sin IA externa
-    modelo: ${GROQ_MODEL:llama-3.3-70b-versatile}
+    api-key: ${GROQ_API_KEY:}            # vacío = se usa la clave del proyecto incluida en GroqClient (funciona sin configurar nada)
+    modelo: ${GROQ_MODEL:openai/gpt-oss-120b}
     url: ${GROQ_URL:https://api.groq.com/openai/v1/chat/completions}

@@ -24,6 +24,7 @@ public class LicitacionBsController {
     @GetMapping("/bs/licitaciones/mias") public List<LicitacionDto> mias(HttpServletRequest r) { return svc.mias(Auth.sesion(r).usuarioId()); }
     @GetMapping("/bs/licitaciones/todas") public List<LicitacionDto> todas() { return svc.todas(); }
     @GetMapping("/bs/licitaciones/{id}") public LicitacionDto obtener(@PathVariable long id) { return svc.obtener(id); }
+    @GetMapping("/bs/licitaciones/{id}/documento") public ArchivoDto documento(@PathVariable long id) { return svc.documento(id); }
 
     @PostMapping("/bs/licitaciones") @ResponseStatus(HttpStatus.CREATED)
     public LicitacionDto crear(HttpServletRequest r, @RequestBody NuevaLicitacion b) { return svc.crear(Auth.sesion(r).usuarioId(), b); }
