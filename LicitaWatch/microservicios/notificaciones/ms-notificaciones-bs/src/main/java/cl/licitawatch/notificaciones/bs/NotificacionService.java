@@ -5,8 +5,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -17,11 +18,13 @@ import java.util.List;
 public class NotificacionService {
     private static final Logger log = LoggerFactory.getLogger(NotificacionService.class);
     private final InternalClient interno; private final JavaMailSender mail;
-    private final String urlBd, urlUsuarios, remitente; private final boolean correoActivo;
+    private final String urlBd, urlUsuarios, remitente, appUrl; private final boolean correoActivo;
 
     public NotificacionService(InternalClient interno, JavaMailSender mail, @Value("${lw.urls.bd}") String urlBd, @Value("${lw.urls.usuarios}") String urlUsuarios,
-                               @Value("${lw.correo.remitente}") String remitente, @Value("${lw.correo.activo}") boolean correoActivo) {
+                               @Value("${lw.correo.remitente}") String remitente, @Value("${lw.correo.activo}") boolean correoActivo,
+                               @Value("${lw.app.url}") String appUrl) {
         this.interno = interno; this.mail = mail; this.urlBd = urlBd; this.urlUsuarios = urlUsuarios; this.remitente = remitente; this.correoActivo = correoActivo;
+        this.appUrl = appUrl;
     }
 
     public record NotificacionDto(Long id, String tipo, String titulo, String detalle, Instant createdAt, boolean leida) {}
@@ -42,14 +45,20 @@ public class NotificacionService {
      */
     public void crear(long usuarioId, String tipo, String titulo, String detalle, boolean enviarCorreo) {
         interno.post(urlBd + "/bd/notificaciones", java.util.Map.of("usuarioId", usuarioId, "tipo", tipo), JsonNode.class);
-        if (enviarCorreo) enviarCorreo(usuarioId, titulo, detalle);
+        if (enviarCorreo) enviarCorreo(usuarioId, tipo, titulo, detalle);
     }
 
-    private void enviarCorreo(long usuarioId, String asunto, String cuerpo) {
+    /** Correo HTML con el diseño de LicitaWatch (CorreoHtml) y el texto original como alternativa en texto plano. */
+    private void enviarCorreo(long usuarioId, String tipo, String asunto, String cuerpo) {
         try {
-            String para = interno.get(urlUsuarios + "/internal/usuarios/" + usuarioId + "/resumen", JsonNode.class).path("email").asText();
+            JsonNode u = interno.get(urlUsuarios + "/internal/usuarios/" + usuarioId + "/resumen", JsonNode.class);
+            String para = u.path("email").asText();
             if (!correoActivo) { log.info("[CORREO simulado] para={} asunto={} cuerpo={}", para, asunto, cuerpo); return; }
-            SimpleMailMessage m = new SimpleMailMessage(); m.setFrom(remitente); m.setTo(para); m.setSubject(asunto); m.setText(cuerpo); mail.send(m);
+            String html = CorreoHtml.armar(tipo, asunto, cuerpo, u.path("nombre").asText(""), u.path("rol").asText(""), appUrl);
+            MimeMessage m = mail.createMimeMessage();
+            MimeMessageHelper h = new MimeMessageHelper(m, true, "UTF-8");
+            h.setFrom(remitente, "LicitaWatch"); h.setTo(para); h.setSubject(asunto); h.setText(cuerpo == null ? "" : cuerpo, html);
+            mail.send(m);
         } catch (Exception e) { log.warn("No se pudo enviar el correo: {}", e.getMessage()); }
     }
 

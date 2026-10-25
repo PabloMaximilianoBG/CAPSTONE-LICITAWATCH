@@ -12,6 +12,7 @@ lw:
     ventas: ${URL_VENTAS_BS:http://localhost:8183}
     notificaciones: ${URL_NOTIFICACIONES_BS:http://localhost:8184}
     chat: ${URL_CHAT_BS:http://localhost:8185}
+  app.url: ${APP_URL:http://localhost:5173}   # frontend: destino de los botones de los correos
   correo.remitente: ${MAIL_FROM:licitawatch@gmail.com}   # casilla oficial del proyecto
   correo.activo: ${MAIL_ACTIVO:true}      # false = el correo se registra en el log (modo desarrollo)
 spring.mail:                               # Gmail de LicitaWatch: funciona sin configurar nada (correo.env puede sobrescribirlo)
