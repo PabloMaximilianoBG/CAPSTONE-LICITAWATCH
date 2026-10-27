@@ -38,7 +38,7 @@ Front → API Gateway → **BFF** → **BS** → **BD** → PostgreSQL. Las capa
 - Entre microservicios los ids son **REF sin llave foránea** (se validan por REST). FK solo dentro de la misma base.
 - `rut` = RUT de la empresa; `rut_persona` = RUT de la persona de contacto (ambos únicos, validados con módulo 11; empresa ≥ 50.000.000, persona < 50.000.000).
 - Hibernate `ddl-auto: update` está activo: **cualquier cambio de esquema debe hacerse también en `db/*.sql`** (y dar un script de migración para bases ya creadas) y actualizar el ER en `docs/`.
-- Cosas que el ER no guarda: `giro`, `ultimoLogin` (se devuelven vacíos); precio/cupo del plan en `PlanInfo.java`; texto de notificaciones se deriva del tipo; «leída» vive en localStorage.
+- Cosas que el ER no guarda: `giro` (se devuelve vacío; `ultimoLogin` sí se guarda en `usuario.ultimo_login` al iniciar sesión); precio/cupo del plan en `PlanInfo.java`; texto de notificaciones se deriva del tipo; «leída» vive en localStorage.
 
 ## Cómo ejecutar en local (Ubuntu)
 - Compilar (en la raíz del repo): `mvn -DskipTests install`

@@ -40,6 +40,7 @@ public class AuthService {
         if (!u.activo()) throw ApiException.prohibido("Tu cuenta está bloqueada. Contacta al administrador.");
         // 428: el front lo usa para ofrecer "Reenviar correo de verificación".
         if (!u.emailVerificado()) throw new ApiException(HttpStatus.PRECONDITION_REQUIRED, "Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.");
+        u = bd.marcarLogin(u.id());
         return sesion(u, jwt.emitir(u.id(), u.rol()));
     }
 
