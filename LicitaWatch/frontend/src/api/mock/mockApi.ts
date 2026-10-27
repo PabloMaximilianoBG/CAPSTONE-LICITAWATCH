@@ -100,6 +100,7 @@ function aPostulacion(db: DB, p: PostulacionDB): Postulacion {
   const conv = db.conversaciones.find((c) => c.postulacionId === p.id)
   return {
     ...clon(p),
+    archivada: !!p.archivada,
     licitacionTitulo: l.titulo,
     licitadorNombre: nombreDe(db, l.licitadorId),
     pymeNombre: perfil.razonSocial,
@@ -400,6 +401,17 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const db = loadDb()
     const u = exigir(db, 'PYME')
     return db.postulaciones.filter((p) => p.pymeId === u.id).sort((a, b) => b.fecha.localeCompare(a.fecha)).map((p) => aPostulacion(db, p))
+  },
+  async archivarPostulacion(id, archivada) {
+    await delay(200)
+    const db = loadDb()
+    const u = exigir(db, 'PYME')
+    const p = db.postulaciones.find((x) => x.id === id)
+    if (!p) throw new ApiError('La postulación no existe.', 404)
+    if (p.pymeId !== u.id) throw new ApiError('Solo puedes archivar tus propias postulaciones.', 403)
+    p.archivada = archivada
+    saveDb()
+    return aPostulacion(db, p)
   },
   async decidirPostulacion(id, estado) {
     await delay()

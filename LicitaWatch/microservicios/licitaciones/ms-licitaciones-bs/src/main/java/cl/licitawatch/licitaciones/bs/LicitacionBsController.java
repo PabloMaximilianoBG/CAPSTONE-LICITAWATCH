@@ -43,6 +43,8 @@ public class LicitacionBsController {
     @GetMapping("/bs/postulaciones/mias") public List<PostulacionDto> misPostulaciones(HttpServletRequest r) { return svc.misPostulaciones(Auth.sesion(r).usuarioId()); }
     @PostMapping("/bs/postulaciones/{id}/decision")
     public PostulacionDto decision(HttpServletRequest r, @PathVariable long id, @RequestBody Decision b) { return svc.decidir(id, Auth.sesion(r).usuarioId(), b.estado()); }
+    @PutMapping("/bs/postulaciones/{id}/archivada")
+    public PostulacionDto archivar(HttpServletRequest r, @PathVariable long id, @RequestBody Archivar b) { return svc.archivar(id, Auth.sesion(r).usuarioId(), b.archivada()); }
     @PostMapping("/bs/postulaciones/{id}/adjudicar") public PostulacionDto adjudicar(HttpServletRequest r, @PathVariable long id) { return svc.adjudicar(id, Auth.sesion(r).usuarioId()); }
 
     // ---- servicio a servicio ----

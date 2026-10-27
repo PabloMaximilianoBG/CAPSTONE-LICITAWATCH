@@ -24,6 +24,7 @@ public class LicitacionController {
                                   Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
     public record Postular(String mensaje) {}
     public record Decision(@NotBlank String estado) {}
+    public record Archivar(boolean archivada) {}
 
     private final InternalClient bs; private final String urlBs;
     public LicitacionController(InternalClient bs, @Value("${lw.urls.bs}") String urlBs) { this.bs = bs; this.urlBs = urlBs; }
@@ -66,6 +67,8 @@ public class LicitacionController {
     @GetMapping("/api/postulaciones/mias") public JsonNode misPostulaciones(HttpServletRequest r) { Auth.exigir(r, "PYME"); return get("/bs/postulaciones/mias"); }
     @PostMapping("/api/postulaciones/{id}/decision")
     public JsonNode decision(HttpServletRequest r, @PathVariable long id, @Valid @RequestBody Decision b) { Auth.exigir(r, "LICITADOR"); return post("/bs/postulaciones/" + id + "/decision", b); }
+    @PutMapping("/api/postulaciones/{id}/archivada")
+    public JsonNode archivar(HttpServletRequest r, @PathVariable long id, @RequestBody Archivar b) { Auth.exigir(r, "PYME"); return bs.put(urlBs + "/bs/postulaciones/" + id + "/archivada", b, JsonNode.class); }
     @PostMapping("/api/postulaciones/{id}/adjudicar") public JsonNode adjudicar(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR"); return post("/bs/postulaciones/" + id + "/adjudicar", null); }
 
     @GetMapping("/api/admin/licitaciones") public JsonNode admin(HttpServletRequest r) { Auth.exigir(r, "ADMIN"); return get("/bs/licitaciones/todas"); }

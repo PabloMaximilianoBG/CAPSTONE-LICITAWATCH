@@ -13,7 +13,7 @@ export interface LicitacionDB {
 }
 export interface PostulacionDB {
   id: number; licitacionId: number; pymeId: number; mensaje?: string; fecha: string
-  estado: EstadoPostulacion; adjudicada: boolean; updatedAt: string
+  estado: EstadoPostulacion; adjudicada: boolean; updatedAt: string; archivada?: boolean
 }
 export interface NotificacionDB extends Notificacion { usuarioId: number }
 export interface SuscripcionDB extends Omit<Suscripcion, 'plan' | 'postulacionesUsadas'> { planId: number }

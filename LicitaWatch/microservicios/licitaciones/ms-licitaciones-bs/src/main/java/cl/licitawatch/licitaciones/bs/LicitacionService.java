@@ -30,7 +30,7 @@ public class LicitacionService {
     record Lic(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
                Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb) {}
-    record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt) {}
+    record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
 
     /** 8 MB de archivo ≈ 11,2 millones de caracteres en base64 (más el encabezado del data URL). */
     private static final int MAX_ARCHIVO_B64 = 11_200_200;
@@ -88,7 +88,7 @@ public class LicitacionService {
         JsonNode u = c.usuario(p.pymeId());
         return new PostulacionDto(p.id(), l.id(), l.titulo(), c.nombre(l.licitadorId()), p.pymeId(), c.nombre(p.pymeId()),
                 u.hasNonNull("rubroId") ? u.get("rubroId").asInt() : null, u.hasNonNull("tamanoEmpresaId") ? u.get("tamanoEmpresaId").asInt() : null, c.esPremium(p.pymeId()),
-                p.mensaje(), p.fechaPostulacion().atStartOfDay(ZoneId.systemDefault()).toInstant(), p.estado(), adj, p.updatedAt(), adj ? c.conversaciones.get(p.id()) : null);
+                p.mensaje(), p.fechaPostulacion().atStartOfDay(ZoneId.systemDefault()).toInstant(), p.estado(), adj, p.updatedAt(), adj ? c.conversaciones.get(p.id()) : null, p.archivada());
     }
     private List<PostulacionDto> dtosPost(List<Post> ps, Map<Long, Lic> porId) {
         Ctx c = new Ctx(); c.cargarConversaciones(ps.stream().map(Post::id).toList());
@@ -237,6 +237,15 @@ public class LicitacionService {
     public List<PostulacionDto> misPostulaciones(long pymeId) {
         List<Post> ps = posts("?pymeId=" + pymeId);
         return dtosPost(ps, porId(ps.stream().map(Post::licitacionId).collect(Collectors.toSet())));
+    }
+
+    /** La Pyme archiva (o recupera) una de sus postulaciones para ordenar su lista. */
+    public PostulacionDto archivar(long postulacionId, long pymeId, boolean archivada) {
+        Post p = post(postulacionId);
+        if (p.pymeId() != pymeId) throw ApiException.prohibido("Solo puedes archivar tus propias postulaciones");
+        p = interno.put(urlBd + "/bd/postulaciones/" + postulacionId + "/archivada", Map.of("archivada", archivada), Post.class);
+        Ctx c = new Ctx(); c.cargarConversaciones(List.of(p.id()));
+        return dto(p, lic(p.licitacionId()), c);
     }
 
     public PostulacionDto decidir(long postulacionId, long licitadorId, String estado) {

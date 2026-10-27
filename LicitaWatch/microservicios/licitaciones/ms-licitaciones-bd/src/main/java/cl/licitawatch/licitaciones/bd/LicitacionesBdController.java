@@ -24,11 +24,12 @@ public class LicitacionesBdController {
                           Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb) {}
     /** Documento complementario con su contenido (data URL guardado en archivo_url); contenido null si se publicó sin archivo real. */
     public record ArchivoFila(String nombre, String tipo, String contenido) {}
-    public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt) {}
+    public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
     public record NuevaLic(Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                            Integer maxPostulantes, String imagenUrl, String archivoNombre, String tipoArchivo, String archivoContenido, LocalDate fechaCierre) {}
     public record NuevaPost(Long licitacionId, Long pymeId, String mensaje) {}
     public record Estado(String estado) {}
+    public record Archivo(boolean archivada) {}
 
     private final LicitacionRepo lics; private final PostulacionRepo posts; private final EstadoLicitacionRepo estadosLic; private final EstadoPostulacionRepo estadosPost; private final TipoArchivoRepo tipos;
 
@@ -47,7 +48,7 @@ public class LicitacionesBdController {
                 l.getMaxPostulantes(), l.getImagenUrl(), conContenido ? null : url, l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
                 l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada, kb);
     }
-    private static PostFila fila(Postulacion p) { return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt()); }
+    private static PostFila fila(Postulacion p) { return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt(), p.isArchivada()); }
     private List<LicFila> filas(Collection<Licitacion> ls) { return ls.stream().map(this::fila).toList(); }
     private static Long aLong(BigDecimal b) { return b == null ? null : b.longValue(); }
     private static BigDecimal aDec(Long l) { return l == null ? null : BigDecimal.valueOf(l); }
@@ -149,6 +150,10 @@ public class LicitacionesBdController {
         }
         return fila(p);
     }
+
+    /** Archiva o desarchiva la postulación en la lista de la Pyme (no cambia su estado ni updated_at). */
+    @PutMapping("/postulaciones/{id}/archivada") @Transactional
+    public PostFila archivar(@PathVariable long id, @RequestBody Archivo a) { Postulacion p = post(id); p.setArchivada(a.archivada()); return fila(p); }
 
     /** Al eliminar una cuenta: sus licitaciones (con sus postulaciones) y sus postulaciones. */
     @DeleteMapping("/usuarios/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @Transactional

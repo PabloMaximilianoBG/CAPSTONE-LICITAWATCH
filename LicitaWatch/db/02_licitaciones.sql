@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS postulacion (                  -- 1 licitación -> N 
   fecha_postulacion      DATE    NOT NULL DEFAULT CURRENT_DATE,
   estado_postulacion_id  INTEGER NOT NULL REFERENCES estado_postulacion(id),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  archivada              BOOLEAN NOT NULL DEFAULT FALSE,  -- TRUE = la Pyme la sacó de su lista principal (solo su vista)
   CONSTRAINT uq_post_lic_pyme UNIQUE (licitacion_id, pyme_id)
 );
 CREATE INDEX IF NOT EXISTS ix_post_pyme ON postulacion(pyme_id);
