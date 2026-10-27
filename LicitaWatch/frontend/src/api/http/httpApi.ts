@@ -74,6 +74,8 @@ export const httpApi: Api = {
   documentoLicitacion: (id) => get(`/api/licitaciones/${id}/documento`),
   misLicitaciones: () => get('/api/licitaciones/mias'),
   crearLicitacion: (d) => post('/api/licitaciones', d),
+  alcancePymes: (rubroId, regionId) => get('/api/usuarios/alcance', { rubroId, regionId }),
+  referenciaPresupuesto: (rubroId) => get('/api/licitaciones/referencia', { rubroId }),
   cerrarLicitacion: (id) => post(`/api/licitaciones/${id}/cerrar`),
   async eliminarLicitacion(id) { await req('DELETE', `/api/licitaciones/${id}`) },
   postulantes: (id) => get(`/api/licitaciones/${id}/postulantes`),

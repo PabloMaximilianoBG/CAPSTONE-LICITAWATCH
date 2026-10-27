@@ -132,6 +132,19 @@ public class UsuariosBdController {
         return usuarios.findAllById(ids).stream().filter(u -> u.isActivo() && u.isEmailVerificado()).map(Usuario::getId).sorted().toList();
     }
 
+    /**
+     * Alcance de una licitación nueva: Pymes activas y verificadas del rubro (las que reciben el aviso por rubro)
+     * y, de ellas, cuántas están en la región indicada (por la región de su ciudad).
+     */
+    @GetMapping("/pymes/alcance")
+    public Map<String, Long> alcance(@RequestParam int rubroId, @RequestParam(required = false) Integer regionId) {
+        List<Long> avisadas = pymesPorRubro(rubroId);
+        java.util.Set<Integer> ciudadesRegion = regionId == null ? java.util.Set.of()
+                : ciudades.findByRegionIdOrderByNombre(regionId).stream().map(Ciudad::getId).collect(java.util.stream.Collectors.toSet());
+        long enRegion = pymes.findByRubroId(rubroId).stream().filter(p -> avisadas.contains(p.getUsuarioId()) && ciudadesRegion.contains(p.getCiudadId())).count();
+        return Map.of("rubro", (long) avisadas.size(), "region", enRegion);
+    }
+
     /** ¿Ya hay un licitador o pyme con ese RUT de empresa (rut) o de persona de contacto (rutPersona)? */
     @GetMapping("/perfiles/existe")
     public Map<String, Boolean> existe(@RequestParam(required = false) String rut, @RequestParam(required = false) String rutPersona) {

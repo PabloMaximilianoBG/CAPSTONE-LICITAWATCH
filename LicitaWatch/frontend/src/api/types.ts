@@ -116,6 +116,22 @@ export interface Licitacion {
   pymeAdjudicadaId?: number
 }
 
+/** Pymes que recibirán el aviso de una licitación nueva: todas las del rubro; region = cuántas de ellas están en la región elegida. */
+export interface AlcancePymes {
+  rubro: number
+  region: number
+}
+
+/** Rango típico de presupuesto en un rubro (medianas). desde/hasta vienen vacíos si hay menos de 2 licitaciones con presupuesto. */
+export interface ReferenciaPresupuesto {
+  cantidad: number
+  desde?: number
+  hasta?: number
+}
+
+/** Días mínimos entre la publicación y la fecha de cierre (el backend también lo valida). */
+export const PLAZO_MINIMO_DIAS = 7
+
 export interface NuevaLicitacion {
   titulo: string
   descripcion: string
@@ -349,6 +365,10 @@ export interface Api {
   documentoLicitacion(id: number): Promise<ArchivoLicitacion>
   misLicitaciones(): Promise<Licitacion[]>
   crearLicitacion(d: NuevaLicitacion): Promise<Licitacion>
+  /** Solo Licitador: alcance del aviso por rubro (formulario de publicación). */
+  alcancePymes(rubroId: number, regionId?: number): Promise<AlcancePymes>
+  /** Solo Licitador: presupuesto habitual de las licitaciones del rubro. */
+  referenciaPresupuesto(rubroId: number): Promise<ReferenciaPresupuesto>
   cerrarLicitacion(id: number): Promise<Licitacion>
   /** Solo el Licitador dueño y solo si ninguna Pyme ha postulado (409 si ya tiene postulaciones). */
   eliminarLicitacion(id: number): Promise<void>

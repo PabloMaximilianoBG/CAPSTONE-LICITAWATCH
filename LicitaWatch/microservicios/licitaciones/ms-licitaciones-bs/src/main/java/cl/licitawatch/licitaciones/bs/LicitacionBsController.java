@@ -22,6 +22,7 @@ public class LicitacionBsController {
         return svc.buscar(q, rubroId, regionId, estado, presupuestoMax);
     }
     @GetMapping("/bs/licitaciones/mias") public List<LicitacionDto> mias(HttpServletRequest r) { return svc.mias(Auth.sesion(r).usuarioId()); }
+    @GetMapping("/bs/licitaciones/referencia") public ReferenciaPresupuesto referencia(@RequestParam int rubroId) { return svc.referencia(rubroId); }
     @GetMapping("/bs/licitaciones/todas") public List<LicitacionDto> todas() { return svc.todas(); }
     @GetMapping("/bs/licitaciones/{id}") public LicitacionDto obtener(@PathVariable long id) { return svc.obtener(id); }
     @GetMapping("/bs/licitaciones/{id}/documento") public ArchivoDto documento(@PathVariable long id) { return svc.documento(id); }

@@ -59,6 +59,10 @@ public class AuthController {
     @GetMapping("/api/usuarios/disponibilidad/rut") public JsonNode rut(@RequestParam String valor) { return get("/bs/usuarios/disponibilidad/rut?valor=" + q(valor)); }
     @GetMapping("/api/usuarios/disponibilidad/rut-persona") public JsonNode rutPersona(@RequestParam String valor) { return get("/bs/usuarios/disponibilidad/rut-persona?valor=" + q(valor)); }
 
+    @GetMapping("/api/usuarios/alcance")
+    public JsonNode alcance(HttpServletRequest r, @RequestParam int rubroId, @RequestParam(required = false) Integer regionId) {
+        Auth.exigir(r, "LICITADOR"); return get("/bs/usuarios/alcance?rubroId=" + rubroId + (regionId == null ? "" : "&regionId=" + regionId));
+    }
     @PutMapping("/api/usuarios/foto") public JsonNode foto(HttpServletRequest r, @Valid @RequestBody Foto b) { Auth.sesion(r); return bs.put(urlBs + "/bs/usuarios/foto", b, JsonNode.class); }
     @DeleteMapping("/api/usuarios/foto") public JsonNode quitarFoto(HttpServletRequest r) { Auth.sesion(r); return bs.reenviar(HttpMethod.DELETE, urlBs + "/bs/usuarios/foto", null); }
 

@@ -102,9 +102,12 @@ public class LicitacionService {
     private static boolean es(Post p, String estado) { return estado.equals(p.estado()); }
 
     // ---------- licitaciones ----------
+    /** Días mínimos entre la publicación y el cierre, para que las Pymes alcancen a preparar su postulación. */
+    static final int PLAZO_MINIMO_DIAS = 7;
+
     public LicitacionDto crear(long licitadorId, NuevaLicitacion d) {
         LocalDate cierre = d.fechaCierre().atZone(ZoneId.systemDefault()).toLocalDate();
-        if (cierre.isBefore(LocalDate.now())) throw ApiException.invalido("La fecha de cierre debe ser futura");
+        if (cierre.isBefore(LocalDate.now().plusDays(PLAZO_MINIMO_DIAS))) throw ApiException.invalido("La fecha de cierre debe dar al menos " + PLAZO_MINIMO_DIAS + " días para postular");
         if (d.presupuestoMin() != null && d.presupuestoMax() != null && d.presupuestoMin() > d.presupuestoMax()) throw ApiException.invalido("El presupuesto mínimo no puede superar al máximo");
         // El ER guarda un documento complementario opcional: se toma el primero.
         DocumentoDto doc = d.documentos() == null || d.documentos().isEmpty() ? null : d.documentos().get(0);
@@ -175,6 +178,21 @@ public class LicitacionService {
         if (maxP != null) f.append("&presupuestoMax=").append(maxP);
         return dtos(lics(f.toString())).stream().filter(x -> estado == null || estado.isBlank() || estado.equals(x.estado())).toList();
     }
+    /**
+     * Presupuesto de referencia de un rubro: mediana de los mínimos y de los máximos de las licitaciones publicadas
+     * con presupuesto (si falta uno de los dos extremos se usa el otro). Con menos de 2 licitaciones no hay referencia.
+     */
+    public ReferenciaPresupuesto referencia(int rubroId) {
+        List<Lic> ls = lics("/buscar?q=&rubroId=" + rubroId).stream().filter(l -> l.presupuestoMin() != null || l.presupuestoMax() != null).toList();
+        if (ls.size() < 2) return new ReferenciaPresupuesto(ls.size(), null, null);
+        return new ReferenciaPresupuesto(ls.size(), mediana(ls.stream().map(l -> l.presupuestoMin() != null ? l.presupuestoMin() : l.presupuestoMax()).toList()),
+                mediana(ls.stream().map(l -> l.presupuestoMax() != null ? l.presupuestoMax() : l.presupuestoMin()).toList()));
+    }
+    private static Long mediana(List<Long> v) {
+        List<Long> s = v.stream().sorted().toList(); int n = s.size();
+        return n % 2 == 1 ? s.get(n / 2) : (s.get(n / 2 - 1) + s.get(n / 2)) / 2;
+    }
+
     public LicitacionDto obtener(long id) { return dto(lic(id), new Ctx()); }
 
     /** Documento adjunto para ver o descargar desde la plataforma (Licitador, Pyme o Admin con sesión). */

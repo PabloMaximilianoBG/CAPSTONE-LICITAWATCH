@@ -19,6 +19,8 @@ public final class Dto {
     public record Archivar(boolean archivada) {}
     public record PostulacionDto(Long id, Long licitacionId, String licitacionTitulo, String licitadorNombre, Long pymeId, String pymeNombre, Integer pymeRubroId,
                                  Integer pymeTamanoId, boolean premium, String mensaje, Instant fecha, String estado, boolean adjudicada, Instant updatedAt, Long conversacionId, boolean archivada) {}
+    /** desde/hasta = null cuando hay muy pocas licitaciones del rubro para sugerir un rango. */
+    public record ReferenciaPresupuesto(long cantidad, Long desde, Long hasta) {}
     public record PuntoMensual(String mes, long valor) {}
     public record ResumenLicitador(long publicadas, long abiertas, long adjudicadas, long postulacionesRecibidas, long pendientes, List<PuntoMensual> porMes, List<LicitacionDto> recientes) {}
     public record ResumenPyme(long postulacionesTotal, long pendientes, long aprobadas, long rechazadas, long adjudicadas, long usadasMes, long limiteMes, String plan,
