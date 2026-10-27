@@ -122,7 +122,7 @@ function seed(): DB {
     siiValidado: true, updatedAt: iso(now),
   })
 
-  const licitadores = [
+  const licitadores: [string, string, number, string, string, string, string][] = [
     ['licitador@demo.cl', 'Constructora Andes SpA', 76123450, 'Construcción', 'Santiago', 'Carolina Muñoz', 'Constructora líder en obras industriales y comerciales.'],
     ['compras@mineracordillera.cl', 'Minera Cordillera Norte S.A.', 77234560, 'Minería', 'Calama', 'Rodrigo Vera', 'Operación minera con compras de servicios en faena.'],
     ['abastecimiento@retailpacifico.cl', 'Retail Pacífico S.A.', 76345670, 'Retail y Comercio', 'Viña del Mar', 'Ignacia Torres', 'Cadena de tiendas con presencia en la zona central.'],

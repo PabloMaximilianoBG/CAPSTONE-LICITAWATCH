@@ -18,7 +18,7 @@ import static cl.licitawatch.common.InternalClient.q;
 /** Acceso a la capa BD de Usuarios (ms-usuarios-bd) por REST. Las filas llegan tal como están en las tablas del ER. */
 @Component
 public class UsuariosBd {
-    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto) {}
+    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin) {}
     public record PerfilFila(Long usuarioId, String tipo, String razonSocial, String rut, String rutPersona, String nombreContacto, String emailContacto, String telefono,
                              Integer rubroId, Integer ciudadId, Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, Instant updatedAt, String nombre, String area) {
         boolean esEmpresa() { return !"ADMIN".equals(tipo); }
@@ -51,6 +51,8 @@ public class UsuariosBd {
         return bd.patch(url + "/bd/usuarios/" + id, b, UsuarioFila.class);
     }
     public UsuarioFila foto(long id, String foto) { Map<String, Object> b = new HashMap<>(); b.put("foto", foto); return bd.put(url + "/bd/usuarios/" + id + "/foto", b, UsuarioFila.class); }
+    /** Registra el inicio de sesión (último acceso = ahora). */
+    public UsuarioFila marcarLogin(long id) { return bd.put(url + "/bd/usuarios/" + id + "/ultimo-login", Map.of(), UsuarioFila.class); }
     public void eliminar(long id) { bd.delete(url + "/bd/usuarios/" + id); }
 
     // ---------- perfil ----------

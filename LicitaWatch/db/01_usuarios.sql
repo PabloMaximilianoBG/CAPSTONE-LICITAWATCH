@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS usuario (                -- 1 rol -> N usuarios
   email_verificado BOOLEAN NOT NULL DEFAULT TRUE,      -- FALSE = registrada sin confirmar el correo (no puede iniciar sesión)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   foto       TEXT,                                  -- foto de perfil (data URL JPEG 256x256); NULL = se muestran las iniciales
+  ultimo_login TIMESTAMPTZ,                         -- último inicio de sesión correcto; NULL = nunca ha entrado
   CONSTRAINT uq_usuario_email UNIQUE (email)
 );
 

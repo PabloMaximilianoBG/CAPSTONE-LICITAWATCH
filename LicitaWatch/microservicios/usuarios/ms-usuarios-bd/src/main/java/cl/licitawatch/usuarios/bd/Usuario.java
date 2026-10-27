@@ -3,7 +3,7 @@ package cl.licitawatch.usuarios.bd;
 import jakarta.persistence.*;
 import java.time.Instant;
 
-/** Tabla usuario (ER): id, email UQ, password (bcrypt), rol_id FK, activo, email_verificado, created_at. */
+/** Tabla usuario (ER): id, email UQ, password (bcrypt), rol_id FK, activo, email_verificado, created_at, foto, ultimo_login. */
 @Entity @Table(name = "usuario", uniqueConstraints = @UniqueConstraint(name = "uq_usuario_email", columnNames = "email"))
 public class Usuario {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
@@ -15,6 +15,7 @@ public class Usuario {
     @Column(name = "email_verificado", nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE") private boolean emailVerificado = true;
     @Column(name = "created_at", nullable = false) private Instant createdAt = Instant.now();
     @Column(columnDefinition = "TEXT") private String foto;   // foto de perfil: data URL JPEG 256x256 (null = iniciales)
+    @Column(name = "ultimo_login") private Instant ultimoLogin;   // último inicio de sesión correcto (null = nunca)
 
     public Long getId() { return id; } public void setId(Long id) { this.id = id; }
     public String getEmail() { return email; } public void setEmail(String email) { this.email = email; }
@@ -25,4 +26,5 @@ public class Usuario {
     public boolean isEmailVerificado() { return emailVerificado; } public void setEmailVerificado(boolean v) { this.emailVerificado = v; }
     public Instant getCreatedAt() { return createdAt; } public void setCreatedAt(Instant c) { this.createdAt = c; }
     public String getFoto() { return foto; } public void setFoto(String foto) { this.foto = foto; }
+    public Instant getUltimoLogin() { return ultimoLogin; } public void setUltimoLogin(Instant t) { this.ultimoLogin = t; }
 }

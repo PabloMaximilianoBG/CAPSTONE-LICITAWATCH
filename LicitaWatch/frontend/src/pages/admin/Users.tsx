@@ -3,7 +3,7 @@ import { api } from '../../api'
 import type { Rol, UsuarioAdmin } from '../../api/types'
 import { Avatar, Badge, Button, Card, Cargando, EmptyState, Input, Modal, PageHeader, Select, useAsync, useToast } from '../../components/ui/ui'
 import { formatearRut } from '../../lib/rut'
-import { fechaCorta, hace } from '../../lib/format'
+import { fechaCorta, fechaHora, hace } from '../../lib/format'
 
 export function AdminUsers() {
   const toast = useToast()
@@ -45,7 +45,7 @@ export function AdminUsers() {
                 <td>{x.rutEmpresa ? formatearRut(x.rutEmpresa) : '—'}</td>
                 <td>{x.plan ? <Badge tono={x.plan === 'Premium' ? 'violet' : 'gray'} icon={x.plan === 'Premium' ? 'crown' : undefined}>{x.plan}</Badge> : '—'}</td>
                 <td>{fechaCorta(x.usuario.createdAt)}</td>
-                <td>{x.usuario.ultimoLogin ? hace(x.usuario.ultimoLogin) : 'Nunca'}</td>
+                <td>{x.usuario.ultimoLogin ? <div className="cell-user"><div>{hace(x.usuario.ultimoLogin)}<small>{fechaHora(x.usuario.ultimoLogin)}</small></div></div> : 'Nunca'}</td>
                 <td><Badge tono={x.usuario.activo ? 'green' : 'red'} dot>{x.usuario.activo ? 'Activo' : 'Bloqueado'}</Badge></td>
                 <td className="row-actions">
                   {x.usuario.activo ? <Button size="sm" variant="outline" icon="lock" onClick={() => setAcc({ tipo: 'bloquear', u: x })}>Bloquear</Button> : <Button size="sm" variant="soft" icon="unlock" onClick={() => setAcc({ tipo: 'activar', u: x })}>Activar</Button>}

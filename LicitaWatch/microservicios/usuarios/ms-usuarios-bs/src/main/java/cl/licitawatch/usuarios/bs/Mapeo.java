@@ -6,12 +6,12 @@ import cl.licitawatch.usuarios.bs.UsuariosBd.UsuarioFila;
 
 /**
  * Traduce las filas del ER al contrato JSON del front.
- * Campos que el ER no tiene (giro, ultimoLogin) se devuelven vacíos; siiValidado es true
+ * Campos que el ER no tiene (giro) se devuelven vacíos; siiValidado es true
  * para licitador/pyme porque el registro exige consultar el RUT en el SII.
  */
 public final class Mapeo {
     private Mapeo() {}
-    public static UsuarioDto usuario(UsuarioFila u) { return new UsuarioDto(u.id(), u.email(), u.rol(), u.activo(), u.emailVerificado(), u.createdAt(), null, u.foto()); }
+    public static UsuarioDto usuario(UsuarioFila u) { return new UsuarioDto(u.id(), u.email(), u.rol(), u.activo(), u.emailVerificado(), u.createdAt(), u.ultimoLogin(), u.foto()); }
 
     public static PerfilDto perfil(PerfilFila p) {
         if (!p.esEmpresa()) return new PerfilDto(p.usuarioId(), "LicitaWatch", "", "", p.nombre(), "", null, null, null, null, null, null, null, false, null);
