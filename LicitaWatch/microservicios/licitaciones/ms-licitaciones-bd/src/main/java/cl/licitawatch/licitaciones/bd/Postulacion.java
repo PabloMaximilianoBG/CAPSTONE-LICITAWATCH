@@ -16,6 +16,8 @@ public class Postulacion {
     @Column(name = "fecha_postulacion", nullable = false) private LocalDate fechaPostulacion = LocalDate.now();
     @ManyToOne(fetch = FetchType.EAGER, optional = false) @JoinColumn(name = "estado_postulacion_id", nullable = false) private EstadoPostulacion estado;
     @Column(name = "updated_at", nullable = false) private Instant updatedAt = Instant.now();
+    // true = la Pyme la sacó de su lista principal (solo afecta su vista; el Licitador la sigue viendo igual)
+    @Column(nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT FALSE") private boolean archivada = false;
 
     public Long getId() { return id; } public Long getLicitacionId() { return licitacionId; } public void setLicitacionId(Long v) { licitacionId = v; }
     public Long getPymeId() { return pymeId; } public void setPymeId(Long v) { pymeId = v; }
@@ -23,4 +25,5 @@ public class Postulacion {
     public LocalDate getFechaPostulacion() { return fechaPostulacion; }
     public EstadoPostulacion getEstado() { return estado; } public void setEstado(EstadoPostulacion v) { estado = v; updatedAt = Instant.now(); }
     public Instant getUpdatedAt() { return updatedAt; }
+    public boolean isArchivada() { return archivada; } public void setArchivada(boolean v) { archivada = v; }
 }

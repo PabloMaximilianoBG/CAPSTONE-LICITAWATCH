@@ -153,6 +153,8 @@ export interface Postulacion {
   adjudicada: boolean
   updatedAt: string
   conversacionId?: number
+  /** La Pyme la archivó: sale de su lista principal (el Licitador la sigue viendo igual). */
+  archivada: boolean
 }
 
 export interface Conversacion {
@@ -353,6 +355,8 @@ export interface Api {
   postulantes(licitacionId: number): Promise<Postulacion[]>
   postular(licitacionId: number, mensaje: string): Promise<Postulacion>
   misPostulaciones(): Promise<Postulacion[]>
+  /** Solo la Pyme dueña de la postulación. */
+  archivarPostulacion(id: number, archivada: boolean): Promise<Postulacion>
   decidirPostulacion(id: number, estado: 'Aprobada' | 'Rechazada'): Promise<Postulacion>
   adjudicar(postulacionId: number): Promise<Postulacion>
   resumenLicitador(): Promise<ResumenLicitador>

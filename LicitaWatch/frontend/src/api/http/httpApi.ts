@@ -79,6 +79,7 @@ export const httpApi: Api = {
   postulantes: (id) => get(`/api/licitaciones/${id}/postulantes`),
   postular: (id, mensaje) => post(`/api/licitaciones/${id}/postular`, { mensaje }),
   misPostulaciones: () => get('/api/postulaciones/mias'),
+  archivarPostulacion: (id, archivada) => req('PUT', `/api/postulaciones/${id}/archivada`, { archivada }),
   decidirPostulacion: (id, estado) => post(`/api/postulaciones/${id}/decision`, { estado }),
   adjudicar: (id) => post(`/api/postulaciones/${id}/adjudicar`),
   resumenLicitador: () => get('/api/licitaciones/resumen/licitador'),
