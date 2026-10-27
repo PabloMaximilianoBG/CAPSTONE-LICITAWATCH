@@ -5,6 +5,7 @@ import cl.licitawatch.common.Auth;
 import cl.licitawatch.usuarios.ambassador.SiiAmbassador;
 import cl.licitawatch.usuarios.ambassador.SiiAmbassador.ConsultaSii;
 import cl.licitawatch.usuarios.bs.Dto.*;
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +51,9 @@ public class UsuariosBsController {
         if (bd.rutExiste(r)) throw ApiException.conflicto("Este RUT de empresa ya está registrado en LicitaWatch");
         return sii.consultar(r);
     }
+    /** Cuántas Pymes recibirán el aviso de una licitación de ese rubro y cuántas están en la región (formulario de publicación). */
+    @GetMapping("/usuarios/alcance") public JsonNode alcance(@RequestParam int rubroId, @RequestParam(required = false) Integer regionId) { return bd.alcance(rubroId, regionId); }
+
     @GetMapping("/catalogos/rubros") public List<UsuariosBd.CatalogoFila> rubros() { return bd.rubros(); }
     @GetMapping("/catalogos/regiones") public List<UsuariosBd.CatalogoFila> regiones() { return bd.regiones(); }
     @GetMapping("/catalogos/tamanos") public List<UsuariosBd.CatalogoFila> tamanos() { return bd.tamanos(); }

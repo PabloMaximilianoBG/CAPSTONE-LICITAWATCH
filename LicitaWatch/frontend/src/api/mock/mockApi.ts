@@ -4,7 +4,7 @@ import type {
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
 import { ApiError } from '../errors'
-import { ERROR_SIN_VERIFICAR } from '../types'
+import { ERROR_SIN_VERIFICAR, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
 import { consultarSiiMock } from './sii'
@@ -322,13 +322,32 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const u = exigir(db, 'LICITADOR')
     return db.licitaciones.filter((l) => l.licitadorId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((l) => aLicitacion(db, l))
   },
+  async alcancePymes(rubroId, regionId) {
+    await delay(150)
+    const db = loadDb()
+    exigir(db, 'LICITADOR')
+    // Igual que el backend: Pymes activas y verificadas del rubro; de ellas, las que están en la región (por su ciudad).
+    const avisadas = db.perfiles.filter((p) => p.rubroId === rubroId && db.usuarios.some((x) => x.id === p.usuarioId && x.rol === 'PYME' && x.activo && verificado(x)))
+    const region = avisadas.filter((p) => regionId && CIUDADES.find((c) => c.id === p.ciudadId)?.regionId === regionId).length
+    return { rubro: avisadas.length, region }
+  },
+  async referenciaPresupuesto(rubroId) {
+    await delay(150)
+    const db = loadDb()
+    exigir(db, 'LICITADOR')
+    const ls = db.licitaciones.filter((l) => l.rubroId === rubroId && (l.presupuestoMin != null || l.presupuestoMax != null))
+    if (ls.length < 2) return { cantidad: ls.length }
+    const mediana = (v: number[]) => { const s = [...v].sort((a, b) => a - b); const n = s.length; return n % 2 ? s[(n - 1) / 2] : Math.floor((s[n / 2 - 1] + s[n / 2]) / 2) }
+    return { cantidad: ls.length, desde: mediana(ls.map((l) => (l.presupuestoMin ?? l.presupuestoMax)!)), hasta: mediana(ls.map((l) => (l.presupuestoMax ?? l.presupuestoMin)!)) }
+  },
   async crearLicitacion(d: NuevaLicitacion) {
     await delay(600)
     const db = loadDb()
     const u = exigir(db, 'LICITADOR')
     if (d.titulo.trim().length < 8) throw new ApiError('El título debe tener al menos 8 caracteres.', 422)
     if (d.presupuestoMin && d.presupuestoMax && d.presupuestoMin > d.presupuestoMax) throw new ApiError('El presupuesto mínimo no puede superar al máximo.', 422)
-    if (new Date(d.fechaCierre).getTime() < Date.now()) throw new ApiError('La fecha de cierre debe ser futura.', 422)
+    const minimo = new Date(); minimo.setHours(0, 0, 0, 0); minimo.setDate(minimo.getDate() + PLAZO_MINIMO_DIAS)
+    if (new Date(d.fechaCierre) < minimo) throw new ApiError(`La fecha de cierre debe dar al menos ${PLAZO_MINIMO_DIAS} días para postular.`, 422)
     const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), estado: 'Abierta', createdAt: ahora() }
     db.licitaciones.push(l)
     notificar(db, u.id, 'Licitación publicada', 'Licitación publicada', `Tu licitación "${l.titulo}" ya es visible para las Pymes.`)

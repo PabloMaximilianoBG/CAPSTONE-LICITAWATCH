@@ -42,6 +42,8 @@ public class LicitacionController {
                 .encode().toUriString();
         return bs.get(url, JsonNode.class);
     }
+    @GetMapping("/api/licitaciones/referencia")
+    public JsonNode referencia(HttpServletRequest r, @RequestParam int rubroId) { Auth.exigir(r, "LICITADOR"); return get("/bs/licitaciones/referencia?rubroId=" + rubroId); }
     @GetMapping("/api/licitaciones/mias") public JsonNode mias(HttpServletRequest r) { Auth.exigir(r, "LICITADOR"); return get("/bs/licitaciones/mias"); }
     @GetMapping("/api/licitaciones/{id}") public JsonNode obtener(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id); }
     @GetMapping("/api/licitaciones/{id}/documento") public JsonNode documento(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id + "/documento"); }
