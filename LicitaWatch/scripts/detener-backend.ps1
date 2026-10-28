@@ -14,4 +14,8 @@ if (Test-Path $pidFront) {
   if ($idFront -and (Get-Process -Id $idFront -ErrorAction SilentlyContinue)) { & cmd /c "taskkill /PID $idFront /T /F >nul 2>&1" }
   Remove-Item $pidFront -Force -ErrorAction SilentlyContinue
 }
-if (-not $Silencioso -or $n) { "Detenidos $n procesos del backend." }
+# Si el frontend se levantó a mano (sin .pid), se detiene el proceso node que escucha en el puerto 5173.
+Get-NetTCPConnection -State Listen -LocalPort 5173 -ErrorAction SilentlyContinue | ForEach-Object {
+  if ((Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName -eq 'node') { & cmd /c "taskkill /PID $($_.OwningProcess) /T /F >nul 2>&1" }
+}
+if (-not $Silencioso -or $n) { "Detenidos $n procesos del backend y el frontend." }
