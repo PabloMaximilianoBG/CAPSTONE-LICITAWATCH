@@ -125,4 +125,6 @@ export const httpApi: Api = {
   async eliminarUsuario(id) { await req('DELETE', `/api/admin/usuarios/${id}`) },
   licitacionesAdmin: () => get('/api/admin/licitaciones'),
   ventasAdmin: () => get('/api/admin/ventas'),
+  actualizarPrecioPlan: (planId, precio, password, motivo) => req('PUT', `/api/ventas/planes/${planId}/precio`, { precio, password, motivo }),
+  historialPreciosPlan: () => get('/api/ventas/planes/historial'),
 }

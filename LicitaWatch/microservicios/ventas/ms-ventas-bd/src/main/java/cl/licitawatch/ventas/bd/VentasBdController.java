@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -16,7 +17,9 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/bd")
 public class VentasBdController {
-    public record PlanFila(Integer id, String nombre) {}
+    public record PlanFila(Integer id, String nombre, Integer precioMensual) {}
+    public record CambioPrecio(int precio, long usuarioId, String motivo) {}
+    public record HistorialFila(Long id, Integer planId, String plan, Integer precioAnterior, Integer precioNuevo, Long usuarioId, String motivo, LocalDateTime fecha) {}
     public record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado) {}
     /** Venta con su pago (1:1 por venta_id). */
     public record VentaFila(Long id, Long suscripcionId, long monto, LocalDate fecha, String idTransaccion, String metodo, String estadoPago) {}
@@ -25,15 +28,15 @@ public class VentasBdController {
     public record CompraFila(SuscFila suscripcion, VentaFila venta) {}
 
     private final PlanRepo planes; private final EstadoSuscripcionRepo estadosSusc; private final EstadoPagoRepo estadosPago; private final MetodoPagoRepo metodos;
-    private final SuscripcionRepo suscripciones; private final VentaRepo ventas; private final PagoRepo pagos;
+    private final SuscripcionRepo suscripciones; private final VentaRepo ventas; private final PagoRepo pagos; private final PlanPrecioHistorialRepo historial;
 
     public VentasBdController(PlanRepo planes, EstadoSuscripcionRepo estadosSusc, EstadoPagoRepo estadosPago, MetodoPagoRepo metodos,
-                              SuscripcionRepo suscripciones, VentaRepo ventas, PagoRepo pagos) {
+                              SuscripcionRepo suscripciones, VentaRepo ventas, PagoRepo pagos, PlanPrecioHistorialRepo historial) {
         this.planes = planes; this.estadosSusc = estadosSusc; this.estadosPago = estadosPago; this.metodos = metodos;
-        this.suscripciones = suscripciones; this.ventas = ventas; this.pagos = pagos;
+        this.suscripciones = suscripciones; this.ventas = ventas; this.pagos = pagos; this.historial = historial;
     }
 
-    private static PlanFila fila(PlanSuscripcion p) { return new PlanFila(p.getId(), p.getNombre()); }
+    private static PlanFila fila(PlanSuscripcion p) { return new PlanFila(p.getId(), p.getNombre(), p.getPrecioMensual()); }
     private static SuscFila fila(Suscripcion s) { return new SuscFila(s.getId(), s.getUsuarioId(), s.getPlan().getId(), s.getPlan().getNombre(), s.getEstado().getNombre()); }
     private static VentaFila fila(Venta v, Pago p) {
         return new VentaFila(v.getId(), v.getSuscripcionId(), v.getMonto().longValue(), v.getFecha(), p == null ? null : p.getIdTransaccion(),
@@ -45,6 +48,25 @@ public class VentasBdController {
     @GetMapping("/planes") public List<PlanFila> planes() { return planes.findAll().stream().map(VentasBdController::fila).toList(); }
     @GetMapping("/planes/{id}") public PlanFila plan(@PathVariable int id) { return planes.findById(id).map(VentasBdController::fila).orElseThrow(() -> ApiException.noEncontrado("Plan no encontrado")); }
     @GetMapping("/metodos-pago") public List<String> metodos() { return metodos.findAll().stream().map(MetodoPago::getNombre).toList(); }
+
+    /** Cambia el precio y deja el registro de auditoría en la misma transacción (o se guardan ambos o ninguno). Las reglas las valida la capa BS. */
+    @PutMapping("/planes/{id}/precio") @Transactional
+    public PlanFila cambiarPrecio(@PathVariable int id, @RequestBody CambioPrecio c) {
+        PlanSuscripcion p = planes.findById(id).orElseThrow(() -> ApiException.noEncontrado("Plan no encontrado"));
+        PlanPrecioHistorial h = new PlanPrecioHistorial();
+        h.setPlanId(p.getId()); h.setPrecioAnterior(p.getPrecioMensual()); h.setPrecioNuevo(c.precio()); h.setUsuarioId(c.usuarioId()); h.setMotivo(c.motivo());
+        historial.save(h);
+        p.setPrecioMensual(c.precio());
+        return fila(p);
+    }
+
+    /** Historial de cambios de precio, más reciente primero. */
+    @GetMapping("/planes/historial")
+    public List<HistorialFila> historialPrecios() {
+        Map<Integer, String> nombres = planes.findAll().stream().collect(Collectors.toMap(PlanSuscripcion::getId, PlanSuscripcion::getNombre));
+        return historial.findAllByOrderByIdDesc().stream().map(h -> new HistorialFila(h.getId(), h.getPlanId(), nombres.get(h.getPlanId()), h.getPrecioAnterior(),
+                h.getPrecioNuevo(), h.getUsuarioId(), h.getMotivo(), h.getFecha())).toList();
+    }
 
     // ---------- suscripcion ----------
     /** Filtros opcionales: usuarioId, estado e ids. Más reciente primero. */

@@ -121,7 +121,7 @@ export function Home() {
                 <li><Icon name="checkcircle" size={18} /> Pasa a Premium: más postulaciones, IA y mayor visibilidad</li>
                 <li><Icon name="checkcircle" size={18} /> Alertas por correo de licitaciones de tu rubro</li>
               </ul>
-              <div className="role-price"><b>Desde $0</b><span>Estándar gratis · Premium {clp(24990)}/mes</span></div>
+              <div className="role-price"><b>Desde $0</b><span>Estándar gratis{(() => { const pre = planes.data?.find((p) => p.nombre === 'Premium'); return pre ? ` · Premium ${clp(pre.precioMensual)}/mes` : '' })()}</span></div>
               <Link to="/registro/pyme" className="btn btn-teal btn-lg btn-block"><span>Registrarme como Pyme</span><Icon name="arrowright" size={18} /></Link>
             </article>
           </div>

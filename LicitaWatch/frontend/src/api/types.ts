@@ -226,6 +226,18 @@ export interface Plan {
   beneficios: string[]
 }
 
+/** Auditoría de un cambio de precio de plan (lo registra ms-ventas; usuarioNombre = correo del administrador). */
+export interface CambioPrecioPlan {
+  id: number
+  plan: NombrePlan
+  precioAnterior?: number | null
+  precioNuevo: number
+  usuarioId: number
+  usuarioNombre: string
+  motivo?: string
+  fecha: string
+}
+
 export interface Suscripcion {
   id: number
   usuarioId: number
@@ -412,4 +424,8 @@ export interface Api {
   eliminarUsuario(id: number): Promise<void>
   licitacionesAdmin(): Promise<Licitacion[]>
   ventasAdmin(): Promise<Venta[]>
+  /** Solo Admin: cambia el precio mensual de un plan pagado. Exige reingresar la contraseña; queda auditado. */
+  actualizarPrecioPlan(planId: number, precio: number, password: string, motivo: string): Promise<Plan>
+  /** Solo Admin: historial de cambios de precio, más reciente primero. */
+  historialPreciosPlan(): Promise<CambioPrecioPlan[]>
 }

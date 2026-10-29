@@ -10,8 +10,11 @@ public final class Catalogos {
     public static class PlanSuscripcion {
         @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Integer id;
         @Column(nullable = false, length = 30) private String nombre;
+        /** Precio mensual en CLP; lo configura el administrador (auditado en plan_precio_historial). */
+        @Column(name = "precio_mensual") private Integer precioMensual;
         public PlanSuscripcion() {} public PlanSuscripcion(String n) { nombre = n; }
         public Integer getId() { return id; } public String getNombre() { return nombre; }
+        public Integer getPrecioMensual() { return precioMensual; } public void setPrecioMensual(Integer v) { precioMensual = v; }
     }
 
     @Entity @Table(name = "estado_suscripcion", uniqueConstraints = @UniqueConstraint(name = "uq_estado_susc", columnNames = "nombre"))

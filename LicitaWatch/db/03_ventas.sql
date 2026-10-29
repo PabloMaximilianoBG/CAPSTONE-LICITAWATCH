@@ -3,10 +3,22 @@
 -- Cadena: plan_suscripcion -> suscripcion -> venta -> pago.   usuario_id es REF a Usuarios (sin FK).
 
 CREATE TABLE IF NOT EXISTS plan_suscripcion (
-  id     SERIAL PRIMARY KEY,
-  nombre VARCHAR(30) NOT NULL,                  -- Estándar / Premium
+  id             SERIAL PRIMARY KEY,
+  nombre         VARCHAR(30) NOT NULL,          -- Estándar / Premium
+  precio_mensual INTEGER,                       -- CLP; lo configura el administrador (null = aún sin cargar, el Seeder pone el valor inicial)
   CONSTRAINT uq_plan_nombre UNIQUE (nombre)
 );
+-- Auditoría de cambios de precio: quién (usuario_id REF Usuarios, sin FK), cuándo, de cuánto a cuánto y por qué.
+CREATE TABLE IF NOT EXISTS plan_precio_historial (
+  id              BIGSERIAL PRIMARY KEY,
+  plan_id         INTEGER NOT NULL REFERENCES plan_suscripcion(id),
+  precio_anterior INTEGER,
+  precio_nuevo    INTEGER NOT NULL,
+  usuario_id      BIGINT  NOT NULL,             -- REF Usuarios (administrador que hizo el cambio)
+  motivo          VARCHAR(200),
+  fecha           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_precio_hist_plan ON plan_precio_historial(plan_id);
 CREATE TABLE IF NOT EXISTS estado_suscripcion (
   id     SERIAL PRIMARY KEY,
   nombre VARCHAR(30) NOT NULL,                  -- Activa, Vencida, Cancelada
