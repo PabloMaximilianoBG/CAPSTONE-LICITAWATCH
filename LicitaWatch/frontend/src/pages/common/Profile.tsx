@@ -27,6 +27,8 @@ export function Profile() {
   const guardar = async () => {
     if (!f.razonSocial.trim() || !f.nombreContacto.trim()) return setResultado({ ok: false, mensaje: 'Razón social y nombre de contacto son obligatorios.' })
     if (!validarEmail(f.emailContacto)) return setResultado({ ok: false, mensaje: 'El correo de contacto no es válido.' })
+    const _telD = (f.telefono ?? '').replace(/\D/g, '')
+    if (_telD && (_telD.length !== 9 || !_telD.startsWith('9'))) return setResultado({ ok: false, mensaje: 'El teléfono debe ser un celular chileno válido (9 XXXX XXXX).' })
     setGuardando(true)
     try {
       const n = await api.actualizarPerfil(f); actualizarPerfil(n); setEditando(false)
@@ -117,7 +119,18 @@ export function Profile() {
                 <Field label="Ciudad"><Select value={f.ciudadId} onChange={(e) => set('ciudadId', Number(e.target.value))}>{cat.ciudades.filter((c) => c.regionId === regionId).map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</Select></Field>
                 <Field label="Nombre de contacto" required><Input value={f.nombreContacto} onChange={(e) => set('nombreContacto', e.target.value)} /></Field>
                 <Field label="Correo de contacto" required><Input value={f.emailContacto} onChange={(e) => set('emailContacto', e.target.value)} /></Field>
-                <Field label="Teléfono"><Input value={f.telefono} onChange={(e) => set('telefono', e.target.value)} /></Field>
+                <Field label="Teléfono">
+                  <span className="phone">
+                    <span className="phone-pre">🇨🇱 +56</span>
+                    <Input
+                      value={(() => { const d = (f.telefono ?? '').replace(/^\+56\s*/, '').replace(/\D/g, '').slice(0, 9); return d.length === 0 ? '' : d.length === 1 ? d : d.length <= 5 ? `${d[0]} ${d.slice(1)}` : `${d[0]} ${d.slice(1, 5)} ${d.slice(5)}` })()}
+                      onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 9); const fmt = d.length === 0 ? '' : d.length === 1 ? d : d.length <= 5 ? `${d[0]} ${d.slice(1)}` : `${d[0]} ${d.slice(1, 5)} ${d.slice(5)}`; set('telefono', fmt ? `+56 ${fmt}` : '') }}
+                      placeholder="9 1234 5678"
+                      inputMode="tel"
+                      maxLength={11}
+                    />
+                  </span>
+                </Field>
                 <Field label="Sitio web"><Input value={f.sitioWeb ?? ''} onChange={(e) => set('sitioWeb', e.target.value)} /></Field>
                 <Field label="Descripción de la empresa" className="span-2"><Textarea rows={4} value={f.descripcionEmpresa} onChange={(e) => set('descripcionEmpresa', e.target.value)} /></Field>
               </div>

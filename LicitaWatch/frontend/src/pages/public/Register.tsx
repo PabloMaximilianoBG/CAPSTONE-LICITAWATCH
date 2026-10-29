@@ -122,7 +122,7 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
       : !esRutPersona(rutPersona) ? 'Ingresa tu RUT personal, no el de la empresa'
       : rutPersonaOk === false ? 'Ese RUT personal ya está registrado en otra cuenta' : null,
     emailContacto: !validarEmail(emailContacto) ? 'Correo inválido' : null,
-    telefono: telefono.replace(/\D/g, '').length < 8 ? 'Teléfono inválido' : null,
+    telefono: (() => { const d = telefono.replace(/\D/g, ''); return d.length !== 9 ? 'Ingresa 9 dígitos (ej: 9 1234 5678)' : !d.startsWith('9') ? 'El celular debe empezar con 9' : null })(),
     regionId: !regionId ? 'Selecciona una región' : null,
     ciudadId: !ciudadId ? 'Selecciona una ciudad' : null,
     rutEmpresa: siiEstado === 'error' ? siiMsg : siiEstado !== 'ok' ? 'Valida el RUT de la empresa con el SII' : null,
@@ -221,7 +221,7 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
               </Field>
               <Field label="Correo de contacto" required error={errorDe('emailContacto')} ok={okDe('emailContacto', 'Correo válido')}><Input icon="mail" type="email" value={emailContacto} onChange={(e) => setEmailContacto(e.target.value)} onBlur={() => ver('emailContacto')} placeholder="correo@tuempresa.cl" /></Field>
               <Field label="Teléfono móvil" required error={errorDe('telefono')} ok={okDe('telefono', 'Teléfono válido')}>
-                <span className="phone"><span className="phone-pre">🇨🇱 +56</span><Input value={telefono} onChange={(e) => setTelefono(e.target.value.replace(/[^\d ]/g, ''))} onBlur={() => ver('telefono')} placeholder="9 1234 5678" inputMode="tel" maxLength={13} /></span>
+                <span className="phone"><span className="phone-pre">🇨🇱 +56</span><Input value={telefono} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 9); setTelefono(d.length === 0 ? '' : d.length === 1 ? d : d.length <= 5 ? `${d[0]} ${d.slice(1)}` : `${d[0]} ${d.slice(1, 5)} ${d.slice(5)}`) }} onBlur={() => ver('telefono')} placeholder="9 1234 5678" inputMode="tel" maxLength={11} /></span>
               </Field>
               <Button type="button" iconRight="arrowright" onClick={() => siguiente(0)} block>Continuar</Button>
             </Accordion>
