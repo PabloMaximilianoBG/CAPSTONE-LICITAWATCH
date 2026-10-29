@@ -213,8 +213,8 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
           <form onSubmit={enviar} noValidate className="acc-list">
             <Accordion titulo="Información personal" icon="user" abierto={abierto === 0} onToggle={() => setAbierto(abierto === 0 ? 3 : 0)} estado={ok1 ? 'ok' : undefined}>
               <div className="grid-2">
-                <Field label="Nombres" required error={errorDe('nombres')} ok={okDe('nombres')}><Input value={nombres} onChange={(e) => setNombres(e.target.value)} onBlur={() => ver('nombres')} placeholder="Ingresa tus nombres" autoComplete="given-name" /></Field>
-                <Field label="Apellidos" required error={errorDe('apellidos')} ok={okDe('apellidos')}><Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} onBlur={() => ver('apellidos')} placeholder="Ingresa tus apellidos" autoComplete="family-name" /></Field>
+                <Field label="Nombres" required error={errorDe('nombres')} ok={okDe('nombres')}><Input value={nombres} onChange={(e) => setNombres(e.target.value.replace(/(?:^|[\s-])\S/g, (c) => c.toUpperCase()))} onBlur={() => ver('nombres')} placeholder="Ingresa tus nombres" autoComplete="given-name" /></Field>
+                <Field label="Apellidos" required error={errorDe('apellidos')} ok={okDe('apellidos')}><Input value={apellidos} onChange={(e) => setApellidos(e.target.value.replace(/(?:^|[\s-])\S/g, (c) => c.toUpperCase()))} onBlur={() => ver('apellidos')} placeholder="Ingresa tus apellidos" autoComplete="family-name" /></Field>
               </div>
               <Field label="RUT personal" required error={errorDe('rutPersona')} ok={!err.rutPersona && rutPersonaOk ? 'RUT disponible' : null} hint="Identifica a la persona de contacto. Ej: 12.345.678-5">
                 <Input icon="user" value={rutPersona} onChange={(e) => setRutPersona(formatearRut(e.target.value))} onBlur={() => ver('rutPersona')} placeholder="12.345.678-5" inputMode="text" maxLength={12} />
