@@ -15,6 +15,8 @@ public class Seeder implements CommandLineRunner {
 
     @Override public void run(String... args) {
         for (String n : List.of("Estándar", "Premium")) if (planes.findByNombre(n).isEmpty()) planes.save(new PlanSuscripcion(n));
+        // Precio inicial solo si aún no está cargado: después lo administra el Admin (no se pisa al reiniciar).
+        for (PlanSuscripcion p : planes.findAll()) if (p.getPrecioMensual() == null) { p.setPrecioMensual("Premium".equals(p.getNombre()) ? 24990 : 0); planes.save(p); }
         for (String n : List.of("Activa", "Vencida", "Cancelada")) if (es.findByNombre(n).isEmpty()) es.save(new EstadoSuscripcion(n));
         for (String n : List.of("Aprobado", "Rechazado", "Pendiente")) if (ep.findByNombre(n).isEmpty()) ep.save(new EstadoPago(n));
         for (String n : List.of("Crédito", "Débito")) if (mp.findByNombre(n).isEmpty()) mp.save(new MetodoPago(n));

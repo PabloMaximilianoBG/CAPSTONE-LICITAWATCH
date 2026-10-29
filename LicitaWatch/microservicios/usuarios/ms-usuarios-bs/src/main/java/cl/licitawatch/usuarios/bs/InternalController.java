@@ -12,8 +12,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/internal/usuarios")
 public class InternalController {
-    private final UsuariosBd bd;
-    public InternalController(UsuariosBd bd) { this.bd = bd; }
+    public record Verificacion(String password) {}
+    private final UsuariosBd bd; private final AuthService auth;
+    public InternalController(UsuariosBd bd, AuthService auth) { this.bd = bd; this.auth = auth; }
+
+    /** Re-autenticación: otros dominios confirman la contraseña del usuario antes de una acción sensible. Solo responde { valido }. */
+    @PostMapping("/{id}/verificar-password")
+    public Map<String, Boolean> verificarPassword(@PathVariable long id, @RequestBody Verificacion v) { return Map.of("valido", auth.verificarPassword(id, v.password())); }
 
     @GetMapping("/{id}/resumen")
     public Map<String, Object> resumen(@PathVariable long id) {

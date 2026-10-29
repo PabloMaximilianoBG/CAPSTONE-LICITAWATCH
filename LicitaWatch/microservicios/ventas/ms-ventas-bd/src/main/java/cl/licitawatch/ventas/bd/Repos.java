@@ -24,4 +24,5 @@ public final class Repos {
         List<Venta> findAllByOrderByIdDesc();
     }
     public interface PagoRepo extends JpaRepository<Pago, Long> { List<Pago> findByVentaIdIn(Collection<Long> ventaIds); Optional<Pago> findFirstByIdTransaccion(String idTransaccion); }
+    public interface PlanPrecioHistorialRepo extends JpaRepository<PlanPrecioHistorial, Long> { List<PlanPrecioHistorial> findAllByOrderByIdDesc(); }
 }

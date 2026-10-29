@@ -44,6 +44,13 @@ public class AuthService {
         return sesion(u, jwt.emitir(u.id(), u.rol()));
     }
 
+    /** Re-autenticación para acciones sensibles (p. ej. cambiar el precio de un plan): la contraseña coincide y la cuenta está activa. */
+    public boolean verificarPassword(long usuarioId, String password) {
+        if (password == null || password.isEmpty()) return false;
+        try { UsuarioFila u = bd.usuario(usuarioId); return u.activo() && enc.matches(password, u.password()); }
+        catch (ApiException e) { return false; }
+    }
+
     /** Sesión actual; el token lo agrega el BFF (es el mismo que trajo la petición). */
     public SesionDto me(long usuarioId) {
         UsuarioFila u;

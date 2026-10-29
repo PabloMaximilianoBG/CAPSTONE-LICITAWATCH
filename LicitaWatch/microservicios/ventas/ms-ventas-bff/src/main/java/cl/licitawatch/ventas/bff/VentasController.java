@@ -4,7 +4,11 @@ import cl.licitawatch.common.Auth;
 import cl.licitawatch.common.InternalClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +26,7 @@ import java.net.URI;
 public class VentasController {
     private static final Logger log = LoggerFactory.getLogger(VentasController.class);
     public record Pago(@Positive long planId) {}
+    public record CambioPrecio(@NotNull @Positive Integer precio, @NotBlank String password, @NotBlank @Size(min = 5, max = 200) String motivo) {}
     private final InternalClient bs; private final String urlBs, urlFront;
     public VentasController(InternalClient bs, @Value("${lw.urls.bs}") String urlBs, @Value("${lw.frontend-url}") String urlFront) { this.bs = bs; this.urlBs = urlBs; this.urlFront = urlFront; }
 
@@ -30,6 +35,13 @@ public class VentasController {
     @GetMapping("/api/ventas/pagos/mios") public JsonNode pagos(HttpServletRequest r) { Auth.exigir(r, "PYME"); return bs.get(urlBs + "/bs/ventas/pagos/mios", JsonNode.class); }
     @PostMapping("/api/ventas/suscripcion/cancelar") public JsonNode cancelar(HttpServletRequest r) { Auth.exigir(r, "PYME"); return bs.post(urlBs + "/bs/ventas/suscripcion/cancelar", null, JsonNode.class); }
     @GetMapping("/api/admin/ventas") public JsonNode admin(HttpServletRequest r) { Auth.exigir(r, "ADMIN"); return bs.get(urlBs + "/bs/ventas/todas", JsonNode.class); }
+
+    /** Precio configurable de los planes (solo Admin; exige reingresar la contraseña). Va bajo /api/ventas/** para no modificar el API Gateway. */
+    @PutMapping("/api/ventas/planes/{id}/precio")
+    public JsonNode cambiarPrecio(HttpServletRequest r, @PathVariable @Positive long id, @RequestBody @Valid CambioPrecio b) {
+        Auth.exigir(r, "ADMIN"); return bs.put(urlBs + "/bs/ventas/planes/" + id + "/precio", b, JsonNode.class);
+    }
+    @GetMapping("/api/ventas/planes/historial") public JsonNode historialPrecios(HttpServletRequest r) { Auth.exigir(r, "ADMIN"); return bs.get(urlBs + "/bs/ventas/planes/historial", JsonNode.class); }
 
     /** Webpay Plus, paso 1: crea la transacción y devuelve { token, url } para que el navegador vaya al formulario de pago de Transbank. */
     @PostMapping("/api/ventas/webpay")

@@ -12,6 +12,7 @@ import java.util.Map;
 @RestController
 public class VentasBsController {
     public record Pago(long planId) {}
+    public record CambioPrecio(Integer precio, String password, String motivo) {}
     private final VentasService ventas;
     public VentasBsController(VentasService ventas) { this.ventas = ventas; }
 
@@ -23,6 +24,11 @@ public class VentasBsController {
     @PostMapping("/bs/ventas/webpay/{token}/confirmar") public ResultadoWebpay confirmarWebpay(@PathVariable String token) { return ventas.confirmarWebpay(token); }
     @PostMapping("/bs/ventas/suscripcion/cancelar") public SuscripcionDto cancelar(HttpServletRequest r) { return ventas.cancelar(Auth.sesion(r).usuarioId()); }
     @GetMapping("/bs/ventas/todas") public List<VentaDto> todas() { return ventas.todas(); }
+    /** Solo Admin (lo valida el BFF). El administrador que firma el cambio sale de la sesión, nunca del cuerpo. */
+    @PutMapping("/bs/ventas/planes/{id}/precio") public PlanDto cambiarPrecio(HttpServletRequest r, @PathVariable long id, @RequestBody CambioPrecio b) {
+        return ventas.actualizarPrecio(Auth.sesion(r).usuarioId(), id, b.precio(), b.password(), b.motivo());
+    }
+    @GetMapping("/bs/ventas/planes/historial") public List<HistorialPrecioDto> historialPrecios() { return ventas.historialPrecios(); }
 
     // ---- servicio a servicio ----
     @GetMapping("/internal/ventas/planes") public Map<String, String> planesActivos() { return ventas.planesActivos(); }

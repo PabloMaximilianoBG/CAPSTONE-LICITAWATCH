@@ -1,5 +1,5 @@
 import type {
-  Api, Conversacion, EstadisticasAdmin, FiltroLicitaciones, FiltroUsuarios, Licitacion, MensajeAsistente,
+  Api, CambioPrecioPlan, Conversacion, EstadisticasAdmin, FiltroLicitaciones, FiltroUsuarios, Licitacion, MensajeAsistente,
   MetodoPago, NuevaLicitacion, Perfil, Plan, Postulacion, PuntoMensual, RegistroLicitador, RegistroOk, RegistroPyme,
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
@@ -16,6 +16,7 @@ const DAY = 86400000
 const delay = (ms = 220) => new Promise((r) => setTimeout(r, ms))
 const ahora = () => new Date().toISOString()
 const clon = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T
+const historialPrecios: CambioPrecioPlan[] = []
 
 function getToken() { try { return localStorage.getItem(TOKEN_KEY) } catch { return null } }
 function setToken(t: string | null) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY) } catch { /* nada */ } }
@@ -764,5 +765,25 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const db = loadDb()
     exigir(db, 'ADMIN')
     return clon(db.ventas)
+  },
+  async actualizarPrecioPlan(planId, precio, password, motivo) {
+    await delay(500)
+    const db = loadDb()
+    const u = exigir(db, 'ADMIN')
+    if (!Number.isInteger(precio) || precio < 1000 || precio > 10_000_000) throw new ApiError('El precio debe estar entre $1.000 y $10.000.000 CLP', 400)
+    if ((motivo ?? '').trim().length < 5) throw new ApiError('Indica el motivo del cambio (entre 5 y 200 caracteres)', 400)
+    const plan = PLANES.find((p) => p.id === planId)
+    if (!plan) throw new ApiError('Plan no encontrado', 404)
+    if (plan.nombre === 'Estándar') throw new ApiError('El plan Estándar es gratuito y su precio no se puede modificar', 400)
+    if (plan.precioMensual === precio) throw new ApiError('El precio ingresado es igual al actual', 400)
+    if (db.usuarios.find((x) => x.id === u.id)?.password !== password) throw new ApiError('La contraseña no es correcta. No se modificó el precio.', 403)
+    historialPrecios.unshift({ id: historialPrecios.length + 1, plan: plan.nombre, precioAnterior: plan.precioMensual, precioNuevo: precio, usuarioId: u.id, usuarioNombre: u.email, motivo: motivo.trim(), fecha: ahora() })
+    plan.precioMensual = precio   // modo simulado: vale mientras la pestaña esté abierta
+    return clon(plan)
+  },
+  async historialPreciosPlan() {
+    await delay(120)
+    exigir(loadDb(), 'ADMIN')
+    return clon(historialPrecios)
   },
 }

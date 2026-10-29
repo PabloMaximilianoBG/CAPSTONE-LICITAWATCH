@@ -21,7 +21,8 @@ licitawatch/
 ```
 
 ## 1. Frontend (funciona solo, sin backend)
-```bash
+```bash 
+
 cd frontend
 npm install
 npm run dev          # http://localhost:5173  (VITE_USE_MOCK=true: datos simulados en el navegador)

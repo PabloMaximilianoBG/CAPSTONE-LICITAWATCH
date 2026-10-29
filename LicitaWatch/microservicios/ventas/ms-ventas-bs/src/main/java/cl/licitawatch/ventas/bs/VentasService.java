@@ -20,8 +20,10 @@ public class VentasService {
     public record VentaDto(Long id, Long usuarioId, String usuarioNombre, String plan, long monto, Instant fecha, String metodo, String estado, String idTransaccion) {}
     public record InicioWebpay(String token, String url, String ordenCompra, long monto) {}
     public record ResultadoWebpay(String estado, String ordenCompra, long monto, String metodo, String plan, String codigoAutorizacion, String ultimos4, int cuotas) {}
+    public record HistorialPrecioDto(Long id, String plan, Integer precioAnterior, int precioNuevo, Long usuarioId, String usuarioNombre, String motivo, LocalDateTime fecha) {}
     // Filas tal como las entrega la capa BD.
-    record PlanFila(Integer id, String nombre) {}
+    record PlanFila(Integer id, String nombre, Integer precioMensual) {}
+    record HistorialFila(Long id, Integer planId, String plan, Integer precioAnterior, Integer precioNuevo, Long usuarioId, String motivo, LocalDateTime fecha) {}
     record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado) {}
     record VentaFila(Long id, Long suscripcionId, long monto, LocalDate fecha, String idTransaccion, String metodo, String estadoPago) {}
     record CompraFila(SuscFila suscripcion, VentaFila venta) {}
@@ -47,8 +49,43 @@ public class VentasService {
         return List.of(interno.get(urlBd + "/bd/ventas" + q, VentaFila[].class));
     }
 
-    private PlanDto dto(PlanFila p) { var i = PlanInfo.de(p.nombre()); return new PlanDto(p.id(), p.nombre(), i.precioMensual(), i.postulacionesMes(), i.descripcion(), i.beneficios()); }
+    private static int precio(PlanFila p) { return p.precioMensual() == null ? 0 : p.precioMensual(); }
+    private PlanDto dto(PlanFila p) { var i = PlanInfo.de(p.nombre()); return new PlanDto(p.id(), p.nombre(), precio(p), i.postulacionesMes(), i.descripcion(), i.beneficios()); }
     public List<PlanDto> planes() { return planesBd().stream().map(this::dto).sorted(Comparator.comparing(PlanDto::precioMensual)).toList(); }
+
+    // ---------- precio configurable (solo Admin) ----------
+    static final int PRECIO_MIN = 1_000, PRECIO_MAX = 10_000_000;   // CLP; evita errores de tipeo (p. ej. un cero de más o de menos)
+
+    /**
+     * Cambia el precio mensual de un plan pagado. Exige volver a ingresar la contraseña (la valida ms-usuarios) y deja auditoría
+     * (quién, cuándo, precio anterior y nuevo, motivo). Aplica de inmediato a los pagos que se inicien desde ahora;
+     * las ventas ya registradas conservan su monto (venta.monto es histórico).
+     */
+    public PlanDto actualizarPrecio(long adminId, long planId, Integer precio, String password, String motivo) {
+        if (precio == null || precio < PRECIO_MIN || precio > PRECIO_MAX)
+            throw ApiException.invalido("El precio debe estar entre $" + String.format("%,d", PRECIO_MIN).replace(',', '.') + " y $" + String.format("%,d", PRECIO_MAX).replace(',', '.') + " CLP");
+        String m = motivo == null ? "" : motivo.trim();
+        if (m.length() < 5 || m.length() > 200) throw ApiException.invalido("Indica el motivo del cambio (entre 5 y 200 caracteres)");
+        PlanFila plan = interno.get(urlBd + "/bd/planes/" + planId, PlanFila.class);
+        if ("Estándar".equals(plan.nombre())) throw ApiException.invalido("El plan Estándar es gratuito y su precio no se puede modificar");
+        if (precio == precio(plan)) throw ApiException.invalido("El precio ingresado es igual al actual");
+        boolean ok;
+        try { ok = interno.post(urlUsuarios + "/internal/usuarios/" + adminId + "/verificar-password", Map.of("password", password == null ? "" : password), JsonNode.class).path("valido").asBoolean(false); }
+        catch (Exception e) { throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo verificar tu contraseña. Intenta nuevamente."); }
+        // 403 y no 401: un 401 cerraría la sesión del administrador en el front.
+        if (!ok) throw ApiException.prohibido("La contraseña no es correcta. No se modificó el precio.");
+        PlanFila nuevo = interno.put(urlBd + "/bd/planes/" + planId + "/precio", Map.of("precio", precio, "usuarioId", adminId, "motivo", m), PlanFila.class);
+        return dto(nuevo);
+    }
+
+    public List<HistorialPrecioDto> historialPrecios() {
+        Map<Long, String> nombres = new HashMap<>();
+        return Stream.of(interno.get(urlBd + "/bd/planes/historial", HistorialFila[].class)).map(h -> new HistorialPrecioDto(h.id(), h.plan(), h.precioAnterior(),
+                h.precioNuevo(), h.usuarioId(), nombres.computeIfAbsent(h.usuarioId(), this::emailDe), h.motivo(), h.fecha())).toList();
+    }
+    private String emailDe(long usuarioId) {
+        try { return interno.get(urlUsuarios + "/internal/usuarios/" + usuarioId + "/resumen", JsonNode.class).path("email").asText("Usuario " + usuarioId); } catch (Exception e) { return "Usuario " + usuarioId; }
+    }
     private static Instant inicioDia(LocalDate d) { return d.atStartOfDay(ZoneId.systemDefault()).toInstant(); }
 
     /** Fecha del último cobro aprobado de una suscripción (la vigencia es de 30 días desde ahí; el ER no guarda fechas en suscripcion). */
@@ -62,7 +99,7 @@ public class VentasService {
         Optional<SuscFila> s = activa(usuarioId);
         if (s.isPresent() && !vigente(s.get())) { cambiarEstado(s.get().id(), "Vencida"); s = Optional.empty(); }
         List<PlanFila> todos = planesBd();
-        PlanFila plan = s.map(x -> new PlanFila(x.planId(), x.plan()))
+        PlanFila plan = s.map(x -> todos.stream().filter(p -> p.id().equals(x.planId())).findFirst().orElse(new PlanFila(x.planId(), x.plan(), null)))
                 .orElseGet(() -> todos.stream().filter(p -> "Estándar".equals(p.nombre())).findFirst().orElseThrow(() -> ApiException.noEncontrado("Plan Estándar no encontrado")));
         Optional<LocalDate> cobro = s.flatMap(x -> ultimoCobro(x.id()));
         return new SuscripcionDto(s.map(SuscFila::id).orElse(0L), usuarioId, dto(plan), "Activa", cobro.map(VentasService::inicioDia).orElse(Instant.EPOCH),
@@ -80,7 +117,7 @@ public class VentasService {
      */
     public InicioWebpay iniciarWebpay(long usuarioId, long planId) {
         PlanFila plan = interno.get(urlBd + "/bd/planes/" + planId, PlanFila.class);
-        int precio = PlanInfo.de(plan.nombre()).precioMensual();
+        int precio = precio(plan);   // precio vigente en la BD al momento de iniciar el pago
         if (precio == 0) throw ApiException.invalido("El plan Estándar es gratuito, no requiere pago");
         String orden = "LW" + usuarioId + "-" + System.currentTimeMillis();   // buy_order: máx. 26 caracteres, único por intento
         PasarelaCliente.Transaccion t = pasarela.crear(precio, orden, usuarioId + "-" + plan.id());
