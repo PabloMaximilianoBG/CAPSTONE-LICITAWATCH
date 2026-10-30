@@ -164,7 +164,9 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
       setSii(r)
       setSiiEstado('ok')
       setRutEmpresa(r.rut)
+      // Sin datos del SII (modo pruebas) se borra la razón social que haya traído una consulta anterior, para no arrastrarla.
       if (r.razonSocial) setRazonSocial(r.razonSocial)
+      else if (sii?.razonSocial && razonSocial === sii.razonSocial) setRazonSocial('')
     } catch (err) {
       setSiiEstado('error'); setSiiMsg((err as Error).message)
     }
@@ -261,16 +263,16 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
               )}
               {siiEstado === 'ok' && sii && (
                 <div className="sii-ok">
-                  <div className="sii-head"><Icon name="shieldcheck" size={20} /><b>Empresa verificada en el SII</b>{sii.modoPruebas && <Badge tono="amber">modo pruebas</Badge>}</div>
+                  <div className="sii-head"><Icon name="shieldcheck" size={20} /><b>{sii.modoPruebas ? 'RUT de empresa válido' : 'Empresa verificada en el SII'}</b>{sii.modoPruebas && <Badge tono="amber">modo pruebas</Badge>}</div>
                   <ul>
                     <li><Icon name="check" size={14} /> RUT con dígito verificador válido</li>
                     <li><Icon name="check" size={14} /> RUT de empresa disponible en LicitaWatch</li>
-                    <li><Icon name="check" size={14} /> {sii.estado}</li>
+                    {sii.estado && <li><Icon name="check" size={14} /> {sii.estado}</li>}
                   </ul>
-                  <small>{sii.giro}</small>
+                  {sii.modoPruebas ? <small>No pudimos traer los datos desde el SII. Escribe la razón social tal como aparece en el SII.</small> : sii.giro && <small>{sii.giro}</small>}
                 </div>
               )}
-              <Field label="Razón social" required error={errorDe('razonSocial')} ok={okDe('razonSocial')}>
+              <Field label="Razón social" required error={errorDe('razonSocial')} ok={okDe('razonSocial')} hint={sii?.modoPruebas ? 'Tal como aparece en el SII (ej: Constructora Andes SpA).' : undefined}>
                 <Input icon="briefcase" value={razonSocial} onChange={(e) => setRazonSocial(e.target.value)} onBlur={() => ver('razonSocial')} placeholder="Nombre legal de la empresa" />
               </Field>
               <div className="grid-2">
