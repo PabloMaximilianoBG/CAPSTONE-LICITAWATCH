@@ -7,7 +7,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-/** Modo pruebas: valida dígito verificador y devuelve datos ficticios o de empresas públicas conocidas. */
+/**
+ * Modo pruebas: valida dígito verificador y devuelve los datos de algunas empresas públicas conocidas.
+ * Para cualquier otro RUT no inventa datos: razón social y giro van vacíos y el usuario escribe la razón social.
+ */
 @Component
 @ConditionalOnProperty(name = "lw.sii.modo", havingValue = "stub", matchIfMissing = true)
 public class SiiStub implements SiiAmbassador {
@@ -24,7 +27,7 @@ public class SiiStub implements SiiAmbassador {
         if (!Rut.esEmpresa(rut)) throw ApiException.noEncontrado("El RUT ingresado corresponde a una persona natural, no a una empresa");
         String cuerpo = rut.substring(0, rut.length() - 1);
         String nombre = PUBLICAS.get(cuerpo);
-        return new ConsultaSii(Rut.formatear(rut), nombre != null ? nombre : "Empresa de prueba " + Rut.formatear(rut),
-                "Actividades empresariales", "Inicio de actividades vigente", "2015-03-01", nombre == null);
+        if (nombre == null) return new ConsultaSii(Rut.formatear(rut), "", "", "", "", true);
+        return new ConsultaSii(Rut.formatear(rut), nombre, "Actividades empresariales", "Inicio de actividades vigente", "2015-03-01", false);
     }
 }
