@@ -31,13 +31,6 @@ export async function consultarSiiMock(rutEntrada: string): Promise<ConsultaSii>
   if (c) {
     return { rut: formatearRut(limpio), razonSocial: c.razon, giro: c.giro, estado: 'Vigente · con inicio de actividades', inicioActividades: '1990-01-01', modoPruebas: false }
   }
-  // Modo pruebas: RUT con dígito verificador válido pero fuera del listado público.
-  return {
-    rut: formatearRut(limpio),
-    razonSocial: '',
-    giro: 'Actividades empresariales (modo pruebas)',
-    estado: 'Vigente (modo pruebas)',
-    inicioActividades: '2015-01-01',
-    modoPruebas: true,
-  }
+  // Modo pruebas: RUT con dígito verificador válido pero fuera del listado público. No se inventan datos (igual que el backend).
+  return { rut: formatearRut(limpio), razonSocial: '', giro: '', estado: '', inicioActividades: '', modoPruebas: true }
 }
