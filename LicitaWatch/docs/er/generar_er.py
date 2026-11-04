@@ -149,7 +149,8 @@ svg.lineas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1
 """
 
 # Destacar lo agregado desde la versión anterior del ER (se ve en amarillo).
-NUEVO = {('usuarios', 'usuario', 'ultimo_login'), ('licitaciones', 'postulacion', 'archivada')}
+NUEVO = {('usuarios', 'usuario', 'ultimo_login'), ('licitaciones', 'postulacion', 'archivada'),
+         *{('licitaciones', 'documento_licitacion', c) for c in ('id', 'licitacion_id', 'nombre', 'archivo_url', 'tipo_archivo_id', 'created_at')}}
 
 
 def diagrama(base, i_pag):

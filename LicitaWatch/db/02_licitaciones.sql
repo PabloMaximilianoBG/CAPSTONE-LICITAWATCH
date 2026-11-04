@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS licitacion (
   presupuesto_max       NUMERIC(14,2),
   max_postulantes       INTEGER,
   imagen_url            TEXT,
-  archivo_url           TEXT,                             -- documento complementario opcional (el archivo va a un storage)
+  archivo_url           TEXT,                             -- documento principal opcional (los demás van en documento_licitacion)
   archivo_nombre        VARCHAR(255),
   tipo_archivo_id       INTEGER REFERENCES tipo_archivo(id),
   fecha_cierre          DATE    NOT NULL,
@@ -52,6 +52,16 @@ CREATE TABLE IF NOT EXISTS postulacion (                  -- 1 licitación -> N 
   CONSTRAINT uq_post_lic_pyme UNIQUE (licitacion_id, pyme_id)
 );
 CREATE INDEX IF NOT EXISTS ix_post_pyme ON postulacion(pyme_id);
+
+CREATE TABLE IF NOT EXISTS documento_licitacion (         -- 1 licitación -> N documentos adicionales (anexos, planos…)
+  id               BIGSERIAL PRIMARY KEY,
+  licitacion_id    BIGINT  NOT NULL REFERENCES licitacion(id) ON DELETE CASCADE,
+  nombre           VARCHAR(255) NOT NULL,                 -- nombre original del archivo
+  archivo_url      TEXT    NOT NULL,                      -- contenido del archivo (data URL base64)
+  tipo_archivo_id  INTEGER REFERENCES tipo_archivo(id),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS ix_doc_lic ON documento_licitacion(licitacion_id);
 
 INSERT INTO estado_licitacion  (nombre) VALUES ('Abierta'), ('Cerrada'), ('Adjudicada') ON CONFLICT DO NOTHING;
 INSERT INTO estado_postulacion (nombre) VALUES ('Pendiente'), ('Aprobada'), ('Rechazada') ON CONFLICT DO NOTHING;

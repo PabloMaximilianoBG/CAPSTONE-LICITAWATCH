@@ -6,8 +6,11 @@ import java.util.List;
 
 public final class Dto {
     private Dto() {}
-    /** contenido = data URL del archivo; solo viene al publicar (en las respuestas va null y se pide con /documento). */
-    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb, String contenido) {}
+    /**
+     * contenido = data URL del archivo; solo viene al publicar o agregar (en las respuestas va null y se pide con /documento).
+     * id = null para el documento principal (guardado en la licitación) y el id de documento_licitacion para los adicionales.
+     */
+    public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb, String contenido, Long id) {}
     public record ArchivoDto(String nombre, String tipo, String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
                                   Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<DocumentoDto> documentos, @NotNull Instant fechaCierre) {}

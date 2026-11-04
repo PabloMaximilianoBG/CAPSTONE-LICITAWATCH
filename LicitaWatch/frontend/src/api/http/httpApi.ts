@@ -71,7 +71,9 @@ export const httpApi: Api = {
 
   licitaciones: (f?: FiltroLicitaciones) => get('/api/licitaciones', { ...f }),
   licitacion: (id) => get(`/api/licitaciones/${id}`),
-  documentoLicitacion: (id) => get(`/api/licitaciones/${id}/documento`),
+  documentoLicitacion: (id, docId) => get(docId == null ? `/api/licitaciones/${id}/documento` : `/api/licitaciones/${id}/documentos/${docId}`),
+  agregarDocumento: (id, d) => post(`/api/licitaciones/${id}/documentos`, d),
+  quitarDocumento: (id, docId) => req('DELETE', `/api/licitaciones/${id}/documentos/${docId}`),
   misLicitaciones: () => get('/api/licitaciones/mias'),
   crearLicitacion: (d) => post('/api/licitaciones', d),
   alcancePymes: (rubroId, regionId) => get('/api/usuarios/alcance', { rubroId, regionId }),

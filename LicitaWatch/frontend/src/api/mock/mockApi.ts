@@ -4,7 +4,7 @@ import type {
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
 import { ApiError } from '../errors'
-import { ERROR_SIN_VERIFICAR, PLAZO_MINIMO_DIAS } from '../types'
+import { ERROR_SIN_VERIFICAR, MAX_DOCUMENTOS, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
 import { consultarSiiMock } from './sii'
@@ -85,6 +85,16 @@ function enviarVerificacion(db: DB, u: UsuarioDB) {
 function notificar(db: DB, usuarioId: number, tipo: TipoNotificacion, titulo: string, detalle: string, mail = true) {
   db.notificaciones.unshift({ id: nextId(db, 'notificacion'), usuarioId, tipo, titulo, detalle, createdAt: ahora(), leida: false })
   if (mail) correo(db, usuarioId, `LicitaWatch · ${titulo}`, detalle)
+}
+
+/** Licitación del Licitador en sesión, abierta, para agregar o quitar documentos (mismas reglas que el backend). */
+function docDelDueno(db: DB, id: number, accion: 'agregar' | 'quitar'): LicitacionDB {
+  const u = exigir(db, 'LICITADOR')
+  const l = db.licitaciones.find((x) => x.id === id)
+  if (!l) throw new ApiError('La licitación no existe.', 404)
+  if (l.licitadorId !== u.id) throw new ApiError(`Solo el Licitador dueño puede ${accion} documentos.`, 403)
+  if (l.estado !== 'Abierta' || new Date(l.fechaCierre) < new Date()) throw new ApiError(`Solo puedes ${accion} documentos mientras la licitación esté abierta.`, 409)
+  return l
 }
 
 function aLicitacion(db: DB, l: LicitacionDB): Licitacion {
@@ -309,11 +319,12 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (!l) throw new ApiError('La licitación no existe.', 404)
     return aLicitacion(db, l)
   },
-  async documentoLicitacion(id) {
+  async documentoLicitacion(id, docId) {
     await delay(150)
     const db = loadDb()
-    const d = db.licitaciones.find((x) => x.id === id)?.documentos[0]
-    if (!d) throw new ApiError('La licitación no tiene documento adjunto.', 404)
+    const docs = db.licitaciones.find((x) => x.id === id)?.documentos ?? []
+    const d = docId == null ? docs.find((x) => x.id == null) : docs.find((x) => x.id === docId)
+    if (!d) throw new ApiError(docId == null ? 'La licitación no tiene documento adjunto.' : 'Documento no encontrado.', 404)
     if (!d.contenido) throw new ApiError('Este documento es de ejemplo y no tiene archivo en el modo simulado.', 404)
     return { nombre: d.nombre, tipo: d.tipo, contenido: d.contenido }
   },
@@ -349,7 +360,10 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (d.presupuestoMin && d.presupuestoMax && d.presupuestoMin > d.presupuestoMax) throw new ApiError('El presupuesto mínimo no puede superar al máximo.', 422)
     const minimo = new Date(); minimo.setHours(0, 0, 0, 0); minimo.setDate(minimo.getDate() + PLAZO_MINIMO_DIAS)
     if (new Date(d.fechaCierre) < minimo) throw new ApiError(`La fecha de cierre debe dar al menos ${PLAZO_MINIMO_DIAS} días para postular.`, 422)
-    const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), estado: 'Abierta', createdAt: ahora() }
+    if (d.documentos.length > MAX_DOCUMENTOS) throw new ApiError(`Puedes adjuntar hasta ${MAX_DOCUMENTOS} documentos.`, 422)
+    // Como en el backend: el primero es el principal (sin id) y los demás son adicionales con su id.
+    const documentos = clon(d.documentos).map((x, i) => ({ ...x, id: i === 0 ? undefined : nextId(db, 'documento') }))
+    const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), documentos, estado: 'Abierta', createdAt: ahora() }
     db.licitaciones.push(l)
     notificar(db, u.id, 'Licitación publicada', 'Licitación publicada', `Tu licitación "${l.titulo}" ya es visible para las Pymes.`)
     // Aviso a las Pymes del mismo rubro: campana para todas, correo solo a las Premium (igual que el backend).
@@ -369,6 +383,25 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (u.rol === 'LICITADOR' && l.licitadorId !== u.id) throw new ApiError('Solo puedes cerrar tus licitaciones.', 403)
     if (l.estado !== 'Abierta') throw new ApiError('Solo se pueden cerrar licitaciones abiertas.', 409)
     l.estado = 'Cerrada'
+    saveDb()
+    return aLicitacion(db, l)
+  },
+  async agregarDocumento(id, d) {
+    await delay(500)
+    const db = loadDb()
+    const l = docDelDueno(db, id, 'agregar')
+    if (!d.contenido) throw new ApiError('Selecciona el archivo que quieres agregar.', 422)
+    if (l.documentos.length >= MAX_DOCUMENTOS) throw new ApiError(`La licitación ya tiene el máximo de ${MAX_DOCUMENTOS} documentos.`, 409)
+    l.documentos.push({ ...clon(d), id: nextId(db, 'documento') })
+    saveDb()
+    return aLicitacion(db, l)
+  },
+  async quitarDocumento(id, docId) {
+    await delay()
+    const db = loadDb()
+    const l = docDelDueno(db, id, 'quitar')
+    if (!l.documentos.some((x) => x.id === docId)) throw new ApiError('Documento no encontrado.', 404)
+    l.documentos = l.documentos.filter((x) => x.id !== docId)
     saveDb()
     return aLicitacion(db, l)
   },

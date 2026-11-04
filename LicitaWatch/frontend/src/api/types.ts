@@ -82,10 +82,12 @@ export interface ConsultaSii {
 }
 
 export interface DocumentoLicitacion {
+  /** Vacío en el documento principal; los documentos adicionales traen su id (para verlos o quitarlos). */
+  id?: number
   nombre: string
   tipo: 'PDF' | 'DOCX' | 'XLSX' | 'Otro'
   tamanoKb: number
-  /** Data URL del archivo: solo se envía al publicar; para verlo o descargarlo se usa documentoLicitacion(). */
+  /** Data URL del archivo: solo se envía al publicar o agregar; para verlo o descargarlo se usa documentoLicitacion(). */
   contenido?: string
 }
 
@@ -128,6 +130,11 @@ export interface ReferenciaPresupuesto {
   desde?: number
   hasta?: number
 }
+
+/** Documentos por licitación contando el principal, tamaño máximo de cada uno y suma máxima al publicar (el backend también lo valida). */
+export const MAX_DOCUMENTOS = 5
+export const MAX_DOCUMENTO_BYTES = 8_000_000
+export const MAX_PUBLICAR_BYTES = 16_000_000
 
 /** Días mínimos entre la publicación y la fecha de cierre (el backend también lo valida). */
 export const PLAZO_MINIMO_DIAS = 7
@@ -373,8 +380,12 @@ export interface Api {
   // Licitaciones
   licitaciones(f?: FiltroLicitaciones): Promise<Licitacion[]>
   licitacion(id: number): Promise<Licitacion>
-  /** Documento adjunto de la licitación (cualquier usuario con sesión: Licitador, Pyme o Admin). */
-  documentoLicitacion(id: number): Promise<ArchivoLicitacion>
+  /** Documento adjunto de la licitación (cualquier usuario con sesión: Licitador, Pyme o Admin); sin docId = el documento principal. */
+  documentoLicitacion(id: number, docId?: number): Promise<ArchivoLicitacion>
+  /** Solo el Licitador dueño, con la licitación abierta: agrega un documento (con su contenido). */
+  agregarDocumento(id: number, d: DocumentoLicitacion): Promise<Licitacion>
+  /** Solo el Licitador dueño, con la licitación abierta: quita un documento adicional. */
+  quitarDocumento(id: number, docId: number): Promise<Licitacion>
   misLicitaciones(): Promise<Licitacion[]>
   crearLicitacion(d: NuevaLicitacion): Promise<Licitacion>
   /** Solo Licitador: alcance del aviso por rubro (formulario de publicación). */
