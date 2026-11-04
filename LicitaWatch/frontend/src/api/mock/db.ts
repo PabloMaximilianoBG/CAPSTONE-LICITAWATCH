@@ -51,7 +51,7 @@ export const PLANES: Plan[] = [
   },
 ]
 
-const KEY = 'lw_db_v4'
+const KEY = 'lw_db_v5'
 const DAY = 86400000
 const iso = (t: number) => new Date(t).toISOString()
 
@@ -102,7 +102,7 @@ function seed(): DB {
   const r = rng(2026)
   const now = Date.now()
   const db: DB = {
-    version: 4, seq: {}, usuarios: [], perfiles: [], licitaciones: [], postulaciones: [], conversaciones: [],
+    version: 5, seq: {}, usuarios: [], perfiles: [], licitaciones: [], postulaciones: [], conversaciones: [],
     mensajes: [], notificaciones: [], suscripciones: [], ventas: [], correos: [], tokens: [], sesiones: {},
   }
 
@@ -170,6 +170,23 @@ function seed(): DB {
     })
   })
 
+  // Pymes de Construcción en la Región Metropolitana: alimentan el «Radar de Pymes» de la licitación de bodega del licitador demo
+  // (14 compatibles: 6 pequeñas, 5 medianas y 3 grandes).
+  const constructoras = ['Constructora Pehuén SpA', 'Obras Civiles Maipú Ltda.', 'Edificaciones Quilicura SpA', 'Montajes Industriales Ñuñoa SpA', 'Estructuras Metálicas Cerrillos Ltda.',
+    'Radieres y Pavimentos Renca SpA', 'Constructora San Bernardo Ltda.', 'Galpones del Maipo SpA', 'Ingeniería y Obras Lampa Ltda.', 'Terminaciones Providencia SpA',
+    'Constructora Pudahuel Ltda.', 'Obras Industriales Colina SpA', 'Hormigones La Florida Ltda.', 'Constructora Los Andes Centro SpA']
+  constructoras.forEach((nombre, i) => {
+    const slug = nombre.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '').slice(0, 14)
+    const u = addUser(`contacto@${slug}.cl`, 'PYME', 120 - i * 5)
+    premium[u.id] = i === 0
+    db.perfiles.push({
+      usuarioId: u.id, razonSocial: nombre, rutEmpresa: rutDe(78100000 + i * 13579), rutPersona: rutDe(14000000 + i * 765432),
+      nombreContacto: 'Contacto ' + nombre.split(' ')[1], emailContacto: `contacto@${slug}.cl`, telefono: `+56 9 ${7100 + i * 37} ${3000 + i * 113}`,
+      rubroId: rubroPorNombre('Construcción'), ciudadId: ciudadPorNombre('Santiago'), tamanoEmpresaId: i < 6 ? 1 : i < 11 ? 2 : 3,
+      descripcionEmpresa: `${nombre} ejecuta obras civiles e industriales en la Región Metropolitana.`, sitioWeb: undefined, giro: 'Construcción', siiValidado: true, updatedAt: iso(now - i * DAY),
+    })
+  })
+
   // Suscripciones: todas las Pymes parten en Estándar; las Premium tienen pagos mensuales.
   const pymeIds = db.usuarios.filter((u) => u.rol === 'PYME').map((u) => u.id)
   const planMes = (i: number) => iso(now - i * 30 * DAY)
@@ -194,7 +211,7 @@ function seed(): DB {
   // Licitaciones
   const licIds = db.usuarios.filter((u) => u.rol === 'LICITADOR').map((u) => u.id)
   const plantillas: [string, string, string, string, number, number, number][] = [
-    ['Construcción de bodega logística de 1.200 m²', 'Construcción', 'Metropolitana de Santiago', 'Se requiere ejecución de obra gruesa y terminaciones de bodega, incluyendo radier industrial, estructura metálica y cierre perimetral. Se evaluará experiencia en obras similares.', 45000000, 68000000, 6],
+    ['Construcción de bodega logística de 1.200 m²', 'Construcción', 'Metropolitana de Santiago', 'Se requiere ejecución de obra gruesa y terminaciones de bodega, incluyendo radier industrial, estructura metálica y cierre perimetral. Se evaluará experiencia en obras similares.\n\nREQUISITOS PARA POSTULAR\n- Experiencia comprobable en obras industriales\n- Inscripción vigente en registro de contratistas\n- Certificado de antecedentes de la empresa al día\n- Capacidad para iniciar obras dentro de 30 días\n\nCONDICIONES DE PAGO\n- Estados de pago mensuales contra avance', 45000000, 68000000, 6],
     ['Servicio de aseo y mantención de oficinas corporativas', 'Aseo y Mantención', 'Metropolitana de Santiago', 'Contrato anual de aseo diario para 3 pisos de oficinas, con insumos incluidos y personal capacitado. Disponibilidad de reemplazos.', 800000, 1400000, 5],
     ['Desarrollo de portal web y app móvil para clientes', 'Tecnología', 'Valparaíso', 'Diseño y desarrollo de portal web responsivo y aplicación móvil para autoatención de clientes, con integración a sistemas internos vía API.', 12000000, 20000000, 4],
     ['Suministro de uniformes y vestuario corporativo', 'Textil y Vestuario', 'Biobío', 'Confección y entrega de 450 uniformes corporativos, con personalización y tallas diferenciadas. Entrega parcializada en 3 hitos.', 6000000, 9500000, 3],
@@ -251,6 +268,18 @@ function seed(): DB {
       else if (k === 2 && li % 3 === 0) estado = 'Rechazada'
       db.postulaciones.push({ id: nextId(db, 'postulacion'), licitacionId: l.id, pymeId: pid, mensaje: mensajesTipo[(li + k) % 3], fecha: iso(fecha), estado, adjudicada, updatedAt: iso(fecha) })
     })
+  })
+
+  // Licitación de bodega (id 1, del licitador demo): 3 postulaciones de hoy, ayer y hace 2 días desde distintas regiones,
+  // para ver la vista panorámica del dueño (cupos, ritmo, embudo y puntos en el mapa).
+  const bodega = db.licitaciones[0]
+  db.postulaciones = db.postulaciones.filter((p) => p.licitacionId !== bodega.id)
+  const porNombre = (n: string) => db.perfiles.find((p) => p.razonSocial === n)!.usuarioId
+  const hoy0 = new Date(); hoy0.setHours(10, 0, 0, 0)
+  const ejemplo: [string, number, EstadoPostulacion][] = [['Constructora Pehuén SpA', 0, 'Pendiente'], ['Obras Civiles Maipú Ltda.', 1, 'Rechazada'], ['Ingeniería Atacama Ltda.', 2, 'Pendiente']]
+  ejemplo.forEach(([n, dias, estado], k) => {
+    const fecha = iso(hoy0.getTime() - dias * DAY)
+    db.postulaciones.push({ id: nextId(db, 'postulacion'), licitacionId: bodega.id, pymeId: porNombre(n), mensaje: mensajesTipo[k], fecha, estado, adjudicada: false, updatedAt: fecha })
   })
 
   // Chats de las adjudicadas

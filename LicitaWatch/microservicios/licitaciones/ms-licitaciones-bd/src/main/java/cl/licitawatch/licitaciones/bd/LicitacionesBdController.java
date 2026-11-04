@@ -162,6 +162,10 @@ public class LicitacionesBdController {
         catch (DataIntegrityViolationException e) { throw ApiException.conflicto("Una Pyme acaba de postular a esta licitación, por lo que ya no se puede eliminar."); }
     }
 
+    /** Catálogo estado_postulacion en orden de id (para mostrar los estados reales con su conteo). */
+    @GetMapping("/catalogos/estados-postulacion")
+    public List<String> estadosPostulacion() { return estadosPost.findAll(org.springframework.data.domain.Sort.by("id")).stream().map(EstadoPostulacion::getNombre).toList(); }
+
     // ---------- postulacion ----------
     /** Filtradas por licitacionIds, pymeId (más reciente primero) o ids. */
     @GetMapping("/postulaciones")

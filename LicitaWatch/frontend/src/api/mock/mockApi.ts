@@ -1,5 +1,5 @@
 import type {
-  Api, CambioPrecioPlan, Conversacion, EstadisticasAdmin, FiltroLicitaciones, FiltroUsuarios, Licitacion, MensajeAsistente,
+  Api, CambioPrecioPlan, Conversacion, EstadisticasAdmin, EstadoPostulacion, FiltroLicitaciones, FiltroUsuarios, Licitacion, MensajeAsistente,
   MetodoPago, NuevaLicitacion, Perfil, Plan, Postulacion, PuntoMensual, RegistroLicitador, RegistroOk, RegistroPyme,
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
@@ -117,6 +117,7 @@ function aPostulacion(db: DB, p: PostulacionDB): Postulacion {
     pymeNombre: perfil.razonSocial,
     pymeRubroId: perfil.rubroId,
     pymeTamanoId: perfil.tamanoEmpresaId,
+    pymeCiudadId: perfil.ciudadId,
     premium: planActual(db, p.pymeId).plan.nombre === 'Premium',
     conversacionId: conv?.id,
   }
@@ -342,6 +343,33 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const avisadas = db.perfiles.filter((p) => p.rubroId === rubroId && db.usuarios.some((x) => x.id === p.usuarioId && x.rol === 'PYME' && x.activo && verificado(x)))
     const region = avisadas.filter((p) => regionId && CIUDADES.find((c) => c.id === p.ciudadId)?.regionId === regionId).length
     return { rubro: avisadas.length, region }
+  },
+  async radarPymes(rubroId, regionId) {
+    await delay(150)
+    const db = loadDb()
+    exigir(db, 'LICITADOR')
+    // Igual que el backend: Pymes activas y verificadas del rubro con ciudad en la región, agrupadas por tamaño.
+    const compatibles = db.perfiles.filter((p) => p.rubroId === rubroId && CIUDADES.find((c) => c.id === p.ciudadId)?.regionId === regionId
+      && db.usuarios.some((x) => x.id === p.usuarioId && x.rol === 'PYME' && x.activo && verificado(x)))
+    const porTamano: Record<string, number> = {}
+    compatibles.forEach((p) => { if (p.tamanoEmpresaId) porTamano[p.tamanoEmpresaId] = (porTamano[p.tamanoEmpresaId] ?? 0) + 1 })
+    return { total: compatibles.length, porTamano, pymeIds: compatibles.map((p) => p.usuarioId).sort((a, b) => a - b) }
+  },
+  async pulsoLicitacion(id) {
+    await delay(150)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'ADMIN')
+    const l = db.licitaciones.find((x) => x.id === id)
+    if (!l) throw new ApiError('La licitación no existe.', 404)
+    if (u.rol === 'LICITADOR' && l.licitadorId !== u.id) throw new ApiError('No puedes ver el pulso de otra licitación.', 403)
+    const ps = db.postulaciones.filter((p) => p.licitacionId === id)
+    const dia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const porDia = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(); d.setDate(d.getDate() - (6 - i))
+      return { fecha: dia(d), valor: ps.filter((p) => dia(new Date(p.fecha)) === dia(d)).length }
+    })
+    const estados: EstadoPostulacion[] = ['Pendiente', 'Aprobada', 'Rechazada']   // catálogo estado_postulacion
+    return { total: ps.length, cupos: l.maxPostulantes, hoy: porDia[6].valor, porDia, conteoPorEstado: estados.map((estado) => ({ estado, cantidad: ps.filter((p) => p.estado === estado).length })) }
   },
   async referenciaPresupuesto(rubroId) {
     await delay(150)

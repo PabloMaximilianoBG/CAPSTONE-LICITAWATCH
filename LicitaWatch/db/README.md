@@ -21,12 +21,20 @@ Los scripts siguen **tu ER** (`docs/Modelo_ER_LicitaWatch.pdf`): 5 bases; LicitA
 
 ## ¿Ya tenías las bases creadas de antes? Ponte al día
 
-Después de un `git pull`, ejecuta las migraciones (todas se pueden correr más de una vez sin problema):
+Después de un `git pull`, ejecuta **todas las migraciones de una vez** (se pueden correr más de una vez sin problema):
+```
+psql -U postgres -f db/actualizar_bd_local.sql
+```
+O una por una, si prefieres:
 ```
 psql -U postgres -d licitawatch_usuarios -f db/migracion_rut_persona.sql      # RUT personal único y obligatorio
 psql -U postgres -d licitawatch_usuarios -f db/migracion_ciudades_rm.sql      # la Región Metropolitana solo tiene la ciudad Santiago
 psql -U postgres -d licitawatch_usuarios -f db/migracion_foto_perfil.sql      # foto de perfil (usuario.foto)
 psql -U postgres -d licitawatch_usuarios -f db/migracion_email_verificado.sql # verificación de correo al registrarse (usuario.email_verificado)
+psql -U postgres -d licitawatch_usuarios -f db/migracion_ultimo_login.sql     # último acceso del usuario (usuario.ultimo_login)
+psql -U postgres -d licitawatch_licitaciones -f db/migracion_postulacion_archivada.sql  # la Pyme archiva postulaciones (postulacion.archivada)
+psql -U postgres -d licitawatch_licitaciones -f db/migracion_documentos_licitacion.sql  # varios documentos por licitación (tabla documento_licitacion)
+psql -U postgres -d licitawatch_ventas   -f db/migracion_precio_planes.sql     # precio de los planes editable por el admin (plan_suscripcion.precio_mensual, plan_precio_historial)
 psql -U postgres -d licitawatch_chat     -f db/migracion_chat_eliminar.sql     # eliminar conversación solo para mí (conversacion.borrada_*_at)
 psql -U postgres -d licitawatch_notificaciones -f db/migracion_tipo_licitacion_rubro.sql  # tipo de notificación «Licitación de tu rubro»
 ```

@@ -38,6 +38,8 @@ public class LicitacionBsController {
     public void eliminar(HttpServletRequest r, @PathVariable long id) { svc.eliminar(id, Auth.sesion(r).usuarioId()); }
     @PostMapping("/bs/licitaciones/{id}/cerrar")
     public LicitacionDto cerrar(HttpServletRequest r, @PathVariable long id) { Sesion s = Auth.sesion(r); return svc.cerrar(id, s.usuarioId(), s.esAdmin()); }
+    @GetMapping("/bs/licitaciones/{id}/pulso")
+    public PulsoLicitacion pulso(HttpServletRequest r, @PathVariable long id) { Sesion s = Auth.sesion(r); return svc.pulso(id, s.usuarioId(), s.esAdmin()); }
     @GetMapping("/bs/licitaciones/{id}/postulantes")
     public List<PostulacionDto> postulantes(HttpServletRequest r, @PathVariable long id) { Sesion s = Auth.sesion(r); return svc.postulantes(id, s.usuarioId(), s.esAdmin()); }
     @PostMapping("/bs/licitaciones/{id}/postular") @ResponseStatus(HttpStatus.CREATED)

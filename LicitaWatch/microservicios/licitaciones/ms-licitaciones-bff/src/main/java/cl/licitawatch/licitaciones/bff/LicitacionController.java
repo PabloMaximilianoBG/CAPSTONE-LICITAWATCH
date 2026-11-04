@@ -65,6 +65,9 @@ public class LicitacionController {
     @PostMapping("/api/licitaciones/{id}/cerrar")
     public JsonNode cerrar(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR", "ADMIN"); return post("/bs/licitaciones/" + id + "/cerrar", null); }
 
+    @GetMapping("/api/licitaciones/{id}/pulso")
+    public JsonNode pulso(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR", "ADMIN"); return get("/bs/licitaciones/" + id + "/pulso"); }
+
     @GetMapping("/api/licitaciones/{id}/postulantes")
     public JsonNode postulantes(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR", "ADMIN"); return get("/bs/licitaciones/" + id + "/postulantes"); }
 

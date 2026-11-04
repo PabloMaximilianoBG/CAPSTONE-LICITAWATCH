@@ -53,6 +53,8 @@ public class UsuariosBsController {
     }
     /** Cuántas Pymes recibirán el aviso de una licitación de ese rubro y cuántas están en la región (formulario de publicación). */
     @GetMapping("/usuarios/alcance") public JsonNode alcance(@RequestParam int rubroId, @RequestParam(required = false) Integer regionId) { return bd.alcance(rubroId, regionId); }
+    /** Radar de Pymes del detalle de una licitación: compatibles por rubro y región, por tamaño de empresa. */
+    @GetMapping("/usuarios/radar") public JsonNode radar(@RequestParam int rubroId, @RequestParam int regionId) { return bd.radar(rubroId, regionId); }
 
     @GetMapping("/catalogos/rubros") public List<UsuariosBd.CatalogoFila> rubros() { return bd.rubros(); }
     @GetMapping("/catalogos/regiones") public List<UsuariosBd.CatalogoFila> regiones() { return bd.regiones(); }

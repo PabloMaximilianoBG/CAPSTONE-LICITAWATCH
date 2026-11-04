@@ -78,6 +78,8 @@ export const httpApi: Api = {
   crearLicitacion: (d) => post('/api/licitaciones', d),
   alcancePymes: (rubroId, regionId) => get('/api/usuarios/alcance', { rubroId, regionId }),
   referenciaPresupuesto: (rubroId) => get('/api/licitaciones/referencia', { rubroId }),
+  pulsoLicitacion: (id) => get(`/api/licitaciones/${id}/pulso`),
+  radarPymes: (rubroId, regionId) => get('/api/usuarios/radar', { rubroId, regionId }),
   cerrarLicitacion: (id) => post(`/api/licitaciones/${id}/cerrar`),
   async eliminarLicitacion(id) { await req('DELETE', `/api/licitaciones/${id}`) },
   postulantes: (id) => get(`/api/licitaciones/${id}/postulantes`),
