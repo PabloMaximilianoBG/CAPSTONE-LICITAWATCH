@@ -4,6 +4,7 @@ import { ApiError } from '../../api/errors'
 import { MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, type DocumentoLicitacion, type Plan, type Postulacion } from '../../api/types'
 import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, Modal, Progress, Textarea, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
 import { VolverLink } from '../../components/app/shared'
+import { TenderPanorama } from '../licitador/TenderPanorama'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
@@ -31,6 +32,7 @@ export function TenderDetail({ id }: { id: number }) {
   const [subiendoDoc, setSubiendoDoc] = useState(false)
   const [quitarDoc, setQuitarDoc] = useState<DocumentoLicitacion | null>(null)
   const refDoc = useRef<HTMLInputElement>(null)
+  const [resaltada, setResaltada] = useState<number | null>(null)   // postulación elegida desde la vista panorámica
   useEffect(() => () => { if (visor) URL.revokeObjectURL(visor.url) }, [visor])
 
   const clave = (d: DocumentoLicitacion) => d.id ?? 'p'
@@ -112,6 +114,140 @@ export function TenderDetail({ id }: { id: number }) {
     setConfirmar(null)
   }
 
+  const docsAccion = puedeEditarDocs && l.documentos.length < MAX_DOCUMENTOS ? <>
+    <Button size="sm" variant="soft" icon="upload" loading={subiendoDoc} onClick={() => refDoc.current?.click()}>Agregar documento</Button>
+    <input ref={refDoc} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { subirDocumento(e.target.files?.[0]); e.target.value = '' }} />
+  </> : undefined
+  const docsLista = l.documentos.length === 0 ? <p className="muted-p">{puedeEditarDocs ? 'Aún no adjuntas documentos. Agrega bases técnicas, anexos o planos para que las Pymes postulen mejor informadas.' : 'El Licitador no adjuntó documentos.'}</p> : (
+    <ul className="doc-list">
+      {l.documentos.map((d) => (
+        <li key={clave(d)}>
+          <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.id == null && l.documentos.length > 1 ? 'Documento principal · ' : ''}{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
+          <div className="doc-acciones">
+            <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'ver')}>Ver</Button>
+            <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'descargar')}>Descargar</Button>
+            {puedeEditarDocs && d.id != null && <button className="icon-btn" onClick={() => setQuitarDoc(d)} aria-label={`Quitar ${d.nombre}`} title="Quitar documento"><Icon name="trash" size={16} /></button>}
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+  const gestionCard = ((esDueno || rol === 'ADMIN') && l.estado === 'Abierta' || esDueno) && (
+    <Card>
+      <CardHeader icon="settings" title="Gestión" />
+      <div className="gestion">
+        {l.estado === 'Abierta' && <Button block variant="outline" icon="lock" onClick={() => setConfirmar({ tipo: 'cerrar' })}>{rol === 'ADMIN' ? 'Cerrar licitación (moderación)' : 'Cerrar licitación'}</Button>}
+        {esDueno && (l.postulantes === 0
+          ? <Button block variant="danger" icon="trash" onClick={() => setConfirmar({ tipo: 'eliminar' })}>Eliminar licitación</Button>
+          : <p className="muted-p"><Icon name="info" size={14} /> No se puede eliminar porque ya tiene postulaciones. {l.estado === 'Abierta' && 'Si ya no la necesitas, ciérrala.'}</p>)}
+      </div>
+    </Card>
+  )
+  const publicadaCard = (
+    <Card>
+      <CardHeader icon="building" title="Publicada por" />
+      <div className="who"><Avatar nombre={l.licitadorNombre} size={46} /><div><b>{l.licitadorNombre}</b><small>Publicada el {fechaCorta(l.createdAt)}</small></div></div>
+      {!esDueno && l.presupuestoMax && <p className="muted-p">Presupuesto máximo referencial: <b>{clp(l.presupuestoMax)}</b></p>}
+    </Card>
+  )
+  const postulacionesCard = (esDueno || rol === 'ADMIN') && (
+    <Card id="postulaciones">
+      <CardHeader icon="users" title={`Postulaciones recibidas (${posts.data?.length ?? 0})`} subtitle={esDueno ? 'Aprueba o rechaza, y adjudica a la Pyme elegida. Las Premium aparecen primero.' : 'Vista de solo lectura'} />
+      {posts.loading ? <Cargando /> : !posts.data || posts.data.length === 0 ? <EmptyState icon="inbox" titulo="Aún no hay postulaciones" texto="Cuando una Pyme postule, la verás aquí." /> : (
+        <div className="applicants">
+          {posts.data.map((p) => (
+            <div key={p.id} id={`postulacion-${p.id}`} className={`applicant ${p.adjudicada ? 'win' : ''} ${resaltada === p.id ? 'resaltada' : ''}`}>
+              <Avatar nombre={p.pymeNombre} size={44} />
+              <div className="applicant-main">
+                <div className="applicant-top">
+                  <b>{p.pymeNombre}</b>
+                  {p.premium && <Badge tono="teal" icon="crown">Premium</Badge>}
+                  <Badge tono={tonoEstado(p.estado)} dot>{p.estado}</Badge>
+                  {p.adjudicada && <Badge tono="violet" icon="award">Adjudicada</Badge>}
+                </div>
+                <small>{cat.rubro(p.pymeRubroId)} · {p.pymeTamanoId ? `Empresa ${cat.tamano(p.pymeTamanoId).toLowerCase()} · ` : ''}postuló {hace(p.fecha)}</small>
+                {p.mensaje && <p>“{p.mensaje}”</p>}
+              </div>
+              {esDueno && (
+                <div className="applicant-actions">
+                  {p.estado === 'Pendiente' && l.estado === 'Abierta' && <>
+                    <Button size="sm" variant="success" icon="check" onClick={() => decidir(p, 'Aprobada')}>Aprobar</Button>
+                    <Button size="sm" variant="outline" icon="x" onClick={() => decidir(p, 'Rechazada')}>Rechazar</Button>
+                  </>}
+                  {p.estado === 'Aprobada' && l.estado === 'Abierta' && <Button size="sm" icon="award" onClick={() => setConfirmar({ tipo: 'adjudicar', p })}>Adjudicar</Button>}
+                  {p.conversacionId && <Button size="sm" variant="teal" icon="chat" onClick={() => navigate(`/app/chat/${p.conversacionId}`)}>Chat</Button>}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+  const modales = <>
+    <Modal abierto={limite} onClose={() => setLimite(false)} titulo="Alcanzaste tu límite de postulaciones" ancho={500}
+      pie={sub.data?.plan.nombre === 'Premium'
+        ? <Button onClick={() => setLimite(false)}>Entendido</Button>
+        : <><Button variant="ghost" onClick={() => setLimite(false)}>Ahora no</Button><Button icon="crown" onClick={() => navigate('/app/suscripcion')}>Pasar a Premium</Button></>}>
+      <div className="limite-pop">
+        <span className="limite-ic"><Icon name="crown" size={28} /></span>
+        {sub.data?.plan.nombre === 'Premium' ? (
+          <p>Ya usaste las <b>{sub.data.plan.postulacionesMes} postulaciones</b> de tu plan Premium este mes. Podrás volver a postular a partir del próximo mes.</p>
+        ) : (
+          <>
+            <p>Ya usaste las <b>{sub.data?.plan.postulacionesMes ?? 3} postulaciones</b> de tu plan Estándar este mes. Pasa a <b>Premium</b> y sigue postulando hoy mismo:</p>
+            <ul>
+              {(premium?.beneficios ?? ['7 postulaciones al mes', 'LicitAsist: asistente con inteligencia artificial', 'Prioridad de visibilidad ante los Licitadores']).map((b) => <li key={b}><Icon name="checkcircle" size={16} />{b}</li>)}
+            </ul>
+            {premium && <p className="limite-precio"><b>{clp(premium.precioMensual)}</b> al mes</p>}
+            <p className="limite-nota">Tu mensaje queda guardado aquí para cuando puedas enviarlo.</p>
+          </>
+        )}
+      </div>
+    </Modal>
+
+    <Modal abierto={!!confirmar} onClose={() => setConfirmar(null)} titulo={confirmar?.tipo === 'adjudicar' ? 'Adjudicar licitación' : confirmar?.tipo === 'eliminar' ? 'Eliminar licitación' : 'Cerrar licitación'}
+      pie={<><Button variant="ghost" onClick={() => setConfirmar(null)}>Cancelar</Button>
+        <Button variant={confirmar?.tipo === 'eliminar' ? 'danger' : undefined} icon={confirmar?.tipo === 'adjudicar' ? 'award' : confirmar?.tipo === 'eliminar' ? 'trash' : 'lock'} onClick={ejecutarConfirmacion}>
+          {confirmar?.tipo === 'adjudicar' ? 'Sí, adjudicar' : confirmar?.tipo === 'eliminar' ? 'Sí, eliminar' : 'Sí, cerrar'}</Button></>}>
+      {confirmar?.tipo === 'adjudicar'
+        ? <p>Vas a adjudicar <b>{l.titulo}</b> a <b>{confirmar.p?.pymeNombre}</b>. Las demás postulaciones pendientes se rechazarán y se abrirá un chat privado con la Pyme.</p>
+        : confirmar?.tipo === 'eliminar'
+          ? <p>Vas a eliminar <b>{l.titulo}</b>. Desaparecerá de LicitaWatch y no se puede recuperar. Esta acción no se puede deshacer.</p>
+          : <p>La licitación <b>{l.titulo}</b> dejará de recibir postulaciones. Esta acción no se puede deshacer.</p>}
+    </Modal>
+
+    <Modal abierto={!!quitarDoc} onClose={() => setQuitarDoc(null)} titulo="Quitar documento" ancho={480}
+      pie={<><Button variant="ghost" onClick={() => setQuitarDoc(null)}>Cancelar</Button><Button variant="danger" icon="trash" onClick={ejecutarQuitarDoc}>Sí, quitar</Button></>}>
+      <p>Vas a quitar <b>{quitarDoc?.nombre}</b> de la licitación. Las Pymes ya no podrán verlo ni descargarlo.</p>
+    </Modal>
+
+    <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.doc.nombre ?? 'Documento'} ancho={980}
+      pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button>{visor && <Button icon="download" onClick={() => abrirDocumento(visor.doc, 'descargar')} loading={cargandoDoc === `descargar-${clave(visor.doc)}`}>Descargar</Button>}</>}>
+      {visor && (visor.mime === 'application/pdf'
+        ? <iframe className="doc-visor" src={visor.url} title={visor.doc.nombre} />
+        : visor.mime.startsWith('image/')
+          ? <img className="doc-visor-img" src={visor.url} alt={visor.doc.nombre} />
+          : <EmptyState icon="file" titulo="Este formato no se puede previsualizar" texto="Los archivos Word y Excel no se muestran en el navegador. Descárgalo para abrirlo en tu computador." />)}
+    </Modal>
+  </>
+
+  /** «Ver» y «Ver todas» de la vista panorámica: baja a la lista completa y resalta la postulación elegida. */
+  const verPostulacion = (p?: Postulacion) => {
+    setResaltada(p?.id ?? null)
+    document.getElementById(p ? `postulacion-${p.id}` : 'postulaciones')?.scrollIntoView({ behavior: 'smooth', block: p ? 'center' : 'start' })
+  }
+
+  // El Licitador dueño ve la vista panorámica de su licitación; la Pyme y el Admin, el detalle de siempre.
+  if (esDueno) return (
+    <div className="stack">
+      <VolverLink to={volver.to} texto={volver.t} />
+      <TenderPanorama l={l} postulaciones={posts.data ?? []} documentos={docsLista} accionDocumentos={docsAccion} gestion={gestionCard} publicadaPor={publicadaCard}
+        listaPostulaciones={postulacionesCard} onVer={verPostulacion} />
+      {modales}
+    </div>
+  )
+
   return (
     <div className="stack">
       <VolverLink to={volver.to} texto={volver.t} />
@@ -143,62 +279,10 @@ export function TenderDetail({ id }: { id: number }) {
             <p className="prose">{l.descripcion}</p>
           </Card>
           <Card>
-            <CardHeader icon="paperclip" title={`Documentos adjuntos${l.documentos.length ? ` (${l.documentos.length})` : ''}`}
-              subtitle={puedeEditarDocs ? `Puedes agregar hasta ${MAX_DOCUMENTOS} documentos mientras la licitación esté abierta.` : undefined}
-              action={puedeEditarDocs && l.documentos.length < MAX_DOCUMENTOS ? <>
-                <Button size="sm" variant="soft" icon="upload" loading={subiendoDoc} onClick={() => refDoc.current?.click()}>Agregar documento</Button>
-                <input ref={refDoc} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { subirDocumento(e.target.files?.[0]); e.target.value = '' }} />
-              </> : undefined} />
-            {l.documentos.length === 0 ? <p className="muted-p">{puedeEditarDocs ? 'Aún no adjuntas documentos. Agrega bases técnicas, anexos o planos para que las Pymes postulen mejor informadas.' : 'El Licitador no adjuntó documentos.'}</p> : (
-              <ul className="doc-list">
-                {l.documentos.map((d) => (
-                  <li key={clave(d)}>
-                    <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.id == null && l.documentos.length > 1 ? 'Documento principal · ' : ''}{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
-                    <div className="doc-acciones">
-                      <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'ver')}>Ver</Button>
-                      <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'descargar')}>Descargar</Button>
-                      {puedeEditarDocs && d.id != null && <button className="icon-btn" onClick={() => setQuitarDoc(d)} aria-label={`Quitar ${d.nombre}`} title="Quitar documento"><Icon name="trash" size={16} /></button>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <CardHeader icon="paperclip" title={`Documentos adjuntos${l.documentos.length ? ` (${l.documentos.length})` : ''}`} />
+            {docsLista}
           </Card>
-
-          {(esDueno || rol === 'ADMIN') && (
-            <Card>
-              <CardHeader icon="users" title={`Postulaciones recibidas (${posts.data?.length ?? 0})`} subtitle={esDueno ? 'Aprueba o rechaza, y adjudica a la Pyme elegida. Las Premium aparecen primero.' : 'Vista de solo lectura'} />
-              {posts.loading ? <Cargando /> : !posts.data || posts.data.length === 0 ? <EmptyState icon="inbox" titulo="Aún no hay postulaciones" texto="Cuando una Pyme postule, la verás aquí." /> : (
-                <div className="applicants">
-                  {posts.data.map((p) => (
-                    <div key={p.id} className={`applicant ${p.adjudicada ? 'win' : ''}`}>
-                      <Avatar nombre={p.pymeNombre} size={44} />
-                      <div className="applicant-main">
-                        <div className="applicant-top">
-                          <b>{p.pymeNombre}</b>
-                          {p.premium && <Badge tono="teal" icon="crown">Premium</Badge>}
-                          <Badge tono={tonoEstado(p.estado)} dot>{p.estado}</Badge>
-                          {p.adjudicada && <Badge tono="violet" icon="award">Adjudicada</Badge>}
-                        </div>
-                        <small>{cat.rubro(p.pymeRubroId)} · {p.pymeTamanoId ? `Empresa ${cat.tamano(p.pymeTamanoId).toLowerCase()} · ` : ''}postuló {hace(p.fecha)}</small>
-                        {p.mensaje && <p>“{p.mensaje}”</p>}
-                      </div>
-                      {esDueno && (
-                        <div className="applicant-actions">
-                          {p.estado === 'Pendiente' && l.estado === 'Abierta' && <>
-                            <Button size="sm" variant="success" icon="check" onClick={() => decidir(p, 'Aprobada')}>Aprobar</Button>
-                            <Button size="sm" variant="outline" icon="x" onClick={() => decidir(p, 'Rechazada')}>Rechazar</Button>
-                          </>}
-                          {p.estado === 'Aprobada' && l.estado === 'Abierta' && <Button size="sm" icon="award" onClick={() => setConfirmar({ tipo: 'adjudicar', p })}>Adjudicar</Button>}
-                          {p.conversacionId && <Button size="sm" variant="teal" icon="chat" onClick={() => navigate(`/app/chat/${p.conversacionId}`)}>Chat</Button>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          )}
+          {postulacionesCard}
         </div>
 
         <div className="stack">
@@ -233,70 +317,12 @@ export function TenderDetail({ id }: { id: number }) {
               )}
             </Card>
           )}
-          {((esDueno || rol === 'ADMIN') && l.estado === 'Abierta' || esDueno) && (
-            <Card>
-              <CardHeader icon="settings" title="Gestión" />
-              <div className="gestion">
-                {l.estado === 'Abierta' && <Button block variant="outline" icon="lock" onClick={() => setConfirmar({ tipo: 'cerrar' })}>{rol === 'ADMIN' ? 'Cerrar licitación (moderación)' : 'Cerrar licitación'}</Button>}
-                {esDueno && (l.postulantes === 0
-                  ? <Button block variant="danger" icon="trash" onClick={() => setConfirmar({ tipo: 'eliminar' })}>Eliminar licitación</Button>
-                  : <p className="muted-p"><Icon name="info" size={14} /> No se puede eliminar porque ya tiene postulaciones. {l.estado === 'Abierta' && 'Si ya no la necesitas, ciérrala.'}</p>)}
-              </div>
-            </Card>
-          )}
-          <Card>
-            <CardHeader icon="building" title="Publicada por" />
-            <div className="who"><Avatar nombre={l.licitadorNombre} size={46} /><div><b>{l.licitadorNombre}</b><small>Publicada el {fechaCorta(l.createdAt)}</small></div></div>
-            {l.presupuestoMax && <p className="muted-p">Presupuesto máximo referencial: <b>{clp(l.presupuestoMax)}</b></p>}
-          </Card>
+          {gestionCard}
+          {publicadaCard}
         </div>
       </div>
 
-      <Modal abierto={limite} onClose={() => setLimite(false)} titulo="Alcanzaste tu límite de postulaciones" ancho={500}
-        pie={sub.data?.plan.nombre === 'Premium'
-          ? <Button onClick={() => setLimite(false)}>Entendido</Button>
-          : <><Button variant="ghost" onClick={() => setLimite(false)}>Ahora no</Button><Button icon="crown" onClick={() => navigate('/app/suscripcion')}>Pasar a Premium</Button></>}>
-        <div className="limite-pop">
-          <span className="limite-ic"><Icon name="crown" size={28} /></span>
-          {sub.data?.plan.nombre === 'Premium' ? (
-            <p>Ya usaste las <b>{sub.data.plan.postulacionesMes} postulaciones</b> de tu plan Premium este mes. Podrás volver a postular a partir del próximo mes.</p>
-          ) : (
-            <>
-              <p>Ya usaste las <b>{sub.data?.plan.postulacionesMes ?? 3} postulaciones</b> de tu plan Estándar este mes. Pasa a <b>Premium</b> y sigue postulando hoy mismo:</p>
-              <ul>
-                {(premium?.beneficios ?? ['7 postulaciones al mes', 'LicitAsist: asistente con inteligencia artificial', 'Prioridad de visibilidad ante los Licitadores']).map((b) => <li key={b}><Icon name="checkcircle" size={16} />{b}</li>)}
-              </ul>
-              {premium && <p className="limite-precio"><b>{clp(premium.precioMensual)}</b> al mes</p>}
-              <p className="limite-nota">Tu mensaje queda guardado aquí para cuando puedas enviarlo.</p>
-            </>
-          )}
-        </div>
-      </Modal>
-
-      <Modal abierto={!!confirmar} onClose={() => setConfirmar(null)} titulo={confirmar?.tipo === 'adjudicar' ? 'Adjudicar licitación' : confirmar?.tipo === 'eliminar' ? 'Eliminar licitación' : 'Cerrar licitación'}
-        pie={<><Button variant="ghost" onClick={() => setConfirmar(null)}>Cancelar</Button>
-          <Button variant={confirmar?.tipo === 'eliminar' ? 'danger' : undefined} icon={confirmar?.tipo === 'adjudicar' ? 'award' : confirmar?.tipo === 'eliminar' ? 'trash' : 'lock'} onClick={ejecutarConfirmacion}>
-            {confirmar?.tipo === 'adjudicar' ? 'Sí, adjudicar' : confirmar?.tipo === 'eliminar' ? 'Sí, eliminar' : 'Sí, cerrar'}</Button></>}>
-        {confirmar?.tipo === 'adjudicar'
-          ? <p>Vas a adjudicar <b>{l.titulo}</b> a <b>{confirmar.p?.pymeNombre}</b>. Las demás postulaciones pendientes se rechazarán y se abrirá un chat privado con la Pyme.</p>
-          : confirmar?.tipo === 'eliminar'
-            ? <p>Vas a eliminar <b>{l.titulo}</b>. Desaparecerá de LicitaWatch y no se puede recuperar. Esta acción no se puede deshacer.</p>
-            : <p>La licitación <b>{l.titulo}</b> dejará de recibir postulaciones. Esta acción no se puede deshacer.</p>}
-      </Modal>
-
-      <Modal abierto={!!quitarDoc} onClose={() => setQuitarDoc(null)} titulo="Quitar documento" ancho={480}
-        pie={<><Button variant="ghost" onClick={() => setQuitarDoc(null)}>Cancelar</Button><Button variant="danger" icon="trash" onClick={ejecutarQuitarDoc}>Sí, quitar</Button></>}>
-        <p>Vas a quitar <b>{quitarDoc?.nombre}</b> de la licitación. Las Pymes ya no podrán verlo ni descargarlo.</p>
-      </Modal>
-
-      <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.doc.nombre ?? 'Documento'} ancho={980}
-        pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button>{visor && <Button icon="download" onClick={() => abrirDocumento(visor.doc, 'descargar')} loading={cargandoDoc === `descargar-${clave(visor.doc)}`}>Descargar</Button>}</>}>
-        {visor && (visor.mime === 'application/pdf'
-          ? <iframe className="doc-visor" src={visor.url} title={visor.doc.nombre} />
-          : visor.mime.startsWith('image/')
-            ? <img className="doc-visor-img" src={visor.url} alt={visor.doc.nombre} />
-            : <EmptyState icon="file" titulo="Este formato no se puede previsualizar" texto="Los archivos Word y Excel no se muestran en el navegador. Descárgalo para abrirlo en tu computador." />)}
-      </Modal>
+      {modales}
     </div>
   )
 }

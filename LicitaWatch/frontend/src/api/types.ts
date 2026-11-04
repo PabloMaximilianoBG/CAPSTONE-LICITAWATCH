@@ -136,6 +136,28 @@ export const MAX_DOCUMENTOS = 5
 export const MAX_DOCUMENTO_BYTES = 8_000_000
 export const MAX_PUBLICAR_BYTES = 16_000_000
 
+/** Radar de una licitación: Pymes activas y verificadas del mismo rubro con ciudad en la región de la licitación. */
+export interface RadarPymes {
+  total: number
+  /** tamano_empresa_id → cantidad (solo vienen los tamaños con Pymes). */
+  porTamano: Record<string, number>
+  /** Para cruzar con quienes ya postularon. */
+  pymeIds: number[]
+}
+
+/** Cupos y pulso de una licitación (vista del dueño). fecha_postulacion es solo fecha, por eso el ritmo es por día. */
+export interface PulsoLicitacion {
+  total: number
+  /** max_postulantes; vacío si la licitación no tiene límite. */
+  cupos?: number
+  /** Postulaciones de hoy. */
+  hoy: number
+  /** Últimos 7 días, del más antiguo a hoy (fecha AAAA-MM-DD). */
+  porDia: { fecha: string; valor: number }[]
+  /** Un elemento por estado del catálogo estado_postulacion, en su orden. */
+  conteoPorEstado: { estado: EstadoPostulacion; cantidad: number }[]
+}
+
 /** Días mínimos entre la publicación y la fecha de cierre (el backend también lo valida). */
 export const PLAZO_MINIMO_DIAS = 7
 
@@ -178,6 +200,8 @@ export interface Postulacion {
   conversacionId?: number
   /** La Pyme la archivó: sale de su lista principal (el Licitador la sigue viendo igual). */
   archivada: boolean
+  /** Ciudad de la Pyme (su región se obtiene con el catálogo de ciudades). */
+  pymeCiudadId?: number
 }
 
 export interface Conversacion {
@@ -392,6 +416,10 @@ export interface Api {
   alcancePymes(rubroId: number, regionId?: number): Promise<AlcancePymes>
   /** Solo Licitador: presupuesto habitual de las licitaciones del rubro. */
   referenciaPresupuesto(rubroId: number): Promise<ReferenciaPresupuesto>
+  /** Solo el Licitador dueño (o Admin): cupos usados, ritmo de los últimos 7 días y conteo por estado. */
+  pulsoLicitacion(id: number): Promise<PulsoLicitacion>
+  /** Solo Licitador: Pymes compatibles con la licitación (rubro y región) por tamaño de empresa. */
+  radarPymes(rubroId: number, regionId: number): Promise<RadarPymes>
   cerrarLicitacion(id: number): Promise<Licitacion>
   /** Solo el Licitador dueño y solo si ninguna Pyme ha postulado (409 si ya tiene postulaciones). */
   eliminarLicitacion(id: number): Promise<void>

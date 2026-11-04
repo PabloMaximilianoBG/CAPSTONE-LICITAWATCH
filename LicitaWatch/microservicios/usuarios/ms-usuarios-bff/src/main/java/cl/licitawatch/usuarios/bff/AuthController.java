@@ -63,6 +63,10 @@ public class AuthController {
     public JsonNode alcance(HttpServletRequest r, @RequestParam int rubroId, @RequestParam(required = false) Integer regionId) {
         Auth.exigir(r, "LICITADOR"); return get("/bs/usuarios/alcance?rubroId=" + rubroId + (regionId == null ? "" : "&regionId=" + regionId));
     }
+    @GetMapping("/api/usuarios/radar")
+    public JsonNode radar(HttpServletRequest r, @RequestParam int rubroId, @RequestParam int regionId) {
+        Auth.exigir(r, "LICITADOR"); return get("/bs/usuarios/radar?rubroId=" + rubroId + "&regionId=" + regionId);
+    }
     @PutMapping("/api/usuarios/foto") public JsonNode foto(HttpServletRequest r, @Valid @RequestBody Foto b) { Auth.sesion(r); return bs.put(urlBs + "/bs/usuarios/foto", b, JsonNode.class); }
     @DeleteMapping("/api/usuarios/foto") public JsonNode quitarFoto(HttpServletRequest r) { Auth.sesion(r); return bs.reenviar(HttpMethod.DELETE, urlBs + "/bs/usuarios/foto", null); }
 

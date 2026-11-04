@@ -145,6 +145,19 @@ public class UsuariosBdController {
         return Map.of("rubro", (long) avisadas.size(), "region", enRegion);
     }
 
+    /**
+     * Radar de una licitación: Pymes activas y verificadas del rubro con ciudad en la región, cuántas hay por tamaño de empresa
+     * (tamano_empresa_id → n) y sus ids (para cruzarlos con quienes ya postularon). Solo lectura.
+     */
+    @GetMapping("/pymes/radar")
+    public Map<String, Object> radar(@RequestParam int rubroId, @RequestParam int regionId) {
+        List<Long> activas = pymesPorRubro(rubroId);
+        java.util.Set<Integer> ciudadesRegion = ciudades.findByRegionIdOrderByNombre(regionId).stream().map(Ciudad::getId).collect(java.util.stream.Collectors.toSet());
+        List<Pyme> compatibles = pymes.findByRubroId(rubroId).stream().filter(p -> activas.contains(p.getUsuarioId()) && ciudadesRegion.contains(p.getCiudadId())).toList();
+        Map<Integer, Long> porTamano = compatibles.stream().collect(java.util.stream.Collectors.groupingBy(Pyme::getTamanoEmpresaId, java.util.TreeMap::new, java.util.stream.Collectors.counting()));
+        return Map.of("total", compatibles.size(), "porTamano", porTamano, "pymeIds", compatibles.stream().map(Pyme::getUsuarioId).sorted().toList());
+    }
+
     /** ¿Ya hay un licitador o pyme con ese RUT de empresa (rut) o de persona de contacto (rutPersona)? */
     @GetMapping("/perfiles/existe")
     public Map<String, Boolean> existe(@RequestParam(required = false) String rut, @RequestParam(required = false) String rutPersona) {

@@ -95,7 +95,8 @@ public class LicitacionService {
         JsonNode u = c.usuario(p.pymeId());
         return new PostulacionDto(p.id(), l.id(), l.titulo(), c.nombre(l.licitadorId()), p.pymeId(), c.nombre(p.pymeId()),
                 u.hasNonNull("rubroId") ? u.get("rubroId").asInt() : null, u.hasNonNull("tamanoEmpresaId") ? u.get("tamanoEmpresaId").asInt() : null, c.esPremium(p.pymeId()),
-                p.mensaje(), p.fechaPostulacion().atStartOfDay(ZoneId.systemDefault()).toInstant(), p.estado(), adj, p.updatedAt(), adj ? c.conversaciones.get(p.id()) : null, p.archivada());
+                p.mensaje(), p.fechaPostulacion().atStartOfDay(ZoneId.systemDefault()).toInstant(), p.estado(), adj, p.updatedAt(), adj ? c.conversaciones.get(p.id()) : null, p.archivada(),
+                u.hasNonNull("ciudadId") ? u.get("ciudadId").asInt() : null);
     }
     private List<PostulacionDto> dtosPost(List<Post> ps, Map<Long, Lic> porId) {
         Ctx c = new Ctx(); c.cargarConversaciones(ps.stream().map(Post::id).toList());
@@ -269,6 +270,22 @@ public class LicitacionService {
         if (!admin && l.licitadorId() != usuarioId) throw ApiException.prohibido("No puedes ver las postulaciones de otra licitación");
         List<PostulacionDto> out = dtosPost(posts("?licitacionIds=" + licitacionId), Map.of(l.id(), l));
         return out.stream().sorted(Comparator.comparing((PostulacionDto p) -> !p.premium()).thenComparing(PostulacionDto::fecha)).toList();    // Premium primero
+    }
+
+    /**
+     * Cupos y pulso de la licitación para su dueño (o el admin): total, cupos, postulaciones de hoy, las de cada uno de los últimos
+     * 7 días y el conteo por cada estado del catálogo estado_postulacion. fecha_postulacion es DATE, por eso el ritmo es por día.
+     */
+    public PulsoLicitacion pulso(long id, long usuarioId, boolean admin) {
+        Lic l = lic(id);
+        if (!admin && l.licitadorId() != usuarioId) throw ApiException.prohibido("No puedes ver el pulso de otra licitación");
+        List<Post> ps = posts("?licitacionIds=" + id);
+        LocalDate hoy = LocalDate.now();
+        List<PuntoDia> porDia = new ArrayList<>();
+        for (int i = 6; i >= 0; i--) { LocalDate d = hoy.minusDays(i); porDia.add(new PuntoDia(d.toString(), ps.stream().filter(p -> d.equals(p.fechaPostulacion())).count())); }
+        List<ConteoEstado> estados = List.of(interno.get(urlBd + "/bd/catalogos/estados-postulacion", String[].class)).stream()
+                .map(e -> new ConteoEstado(e, count(ps, e))).toList();
+        return new PulsoLicitacion(ps.size(), l.maxPostulantes(), porDia.get(6).valor(), porDia, estados);
     }
 
     public PostulacionDto postular(long pymeId, long licitacionId, String mensaje) {
