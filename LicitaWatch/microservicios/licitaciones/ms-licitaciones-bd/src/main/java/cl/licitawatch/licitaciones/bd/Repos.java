@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +29,18 @@ public final class Repos {
               and (:q = '' or lower(l.titulo) like lower(concat('%', :q, '%')) or lower(l.descripcion) like lower(concat('%', :q, '%')))
             order by l.createdAt desc""")
         List<Licitacion> buscar(@Param("q") String q, @Param("rubro") Integer rubro, @Param("region") Integer region, @Param("maxP") BigDecimal maxP);
+    }
+
+    /** Datos de un documento adicional sin su contenido (largo = caracteres del data URL, para calcular el tamaño). */
+    public interface DocResumen { Long getId(); Long getLicitacionId(); String getNombre(); String getTipo(); Integer getLargo(); }
+
+    public interface DocumentoLicitacionRepo extends JpaRepository<DocumentoLicitacion, Long> {
+        @Query("""
+            select d.id as id, d.licitacionId as licitacionId, d.nombre as nombre, t.nombre as tipo, length(d.archivoUrl) as largo
+            from DocumentoLicitacion d left join d.tipoArchivo t where d.licitacionId in :ids order by d.id""")
+        List<DocResumen> resumen(@Param("ids") Collection<Long> ids);
+        long countByLicitacionId(Long licitacionId);
+        void deleteByLicitacionId(Long licitacionId);
     }
 
     public interface PostulacionRepo extends JpaRepository<Postulacion, Long> {

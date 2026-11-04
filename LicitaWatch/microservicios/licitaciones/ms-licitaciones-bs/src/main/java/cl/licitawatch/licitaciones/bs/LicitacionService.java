@@ -29,11 +29,16 @@ public class LicitacionService {
     // Filas tal como las entrega la capa BD.
     record Lic(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
-               Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb) {}
+               Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales) {}
+    record DocFila(Long id, String nombre, String tipo, int tamanoKb) {}
     record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
 
     /** 8 MB de archivo ≈ 11,2 millones de caracteres en base64 (más el encabezado del data URL). */
     private static final int MAX_ARCHIVO_B64 = 11_200_200;
+    /** Documentos por licitación, contando el principal. */
+    static final int MAX_DOCUMENTOS = 5;
+    /** Al publicar todos los documentos viajan en una sola solicitud: máximo 16 MB entre todos (el resto se agrega después, de a uno). */
+    private static final int MAX_PUBLICAR_B64 = 22_400_400;
     private static final Logger log = LoggerFactory.getLogger(LicitacionService.class);
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private final InternalClient interno;
@@ -77,7 +82,9 @@ public class LicitacionService {
     private static String estadoEfectivo(Lic l) { return "Abierta".equals(l.estado()) && l.fechaCierre().isBefore(LocalDate.now()) ? "Cerrada" : l.estado(); }
 
     private LicitacionDto dto(Lic l, Ctx c) {
-        List<DocumentoDto> docs = l.archivoNombre() == null ? List.of() : List.of(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), l.archivoKb() == null ? 0 : l.archivoKb(), null));
+        List<DocumentoDto> docs = new ArrayList<>();
+        if (l.archivoNombre() != null) docs.add(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), l.archivoKb() == null ? 0 : l.archivoKb(), null, null));
+        if (l.adicionales() != null) for (DocFila d : l.adicionales()) docs.add(new DocumentoDto(d.nombre(), d.tipo(), d.tamanoKb(), null, d.id()));
         return new LicitacionDto(l.id(), l.licitadorId(), c.nombre(l.licitadorId()), l.titulo(), l.descripcion(), l.rubroId(), l.regionId(), l.presupuestoMin(),
                 l.presupuestoMax(), l.maxPostulantes(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId());
     }
@@ -109,18 +116,20 @@ public class LicitacionService {
         LocalDate cierre = d.fechaCierre().atZone(ZoneId.systemDefault()).toLocalDate();
         if (cierre.isBefore(LocalDate.now().plusDays(PLAZO_MINIMO_DIAS))) throw ApiException.invalido("La fecha de cierre debe dar al menos " + PLAZO_MINIMO_DIAS + " días para postular");
         if (d.presupuestoMin() != null && d.presupuestoMax() != null && d.presupuestoMin() > d.presupuestoMax()) throw ApiException.invalido("El presupuesto mínimo no puede superar al máximo");
-        // El ER guarda un documento complementario opcional: se toma el primero.
-        DocumentoDto doc = d.documentos() == null || d.documentos().isEmpty() ? null : d.documentos().get(0);
-        if (doc != null && doc.contenido() != null) {
-            if (!doc.contenido().startsWith("data:") || !doc.contenido().contains(";base64,")) throw ApiException.invalido("El documento adjunto no es válido");
-            if (doc.contenido().length() > MAX_ARCHIVO_B64) throw ApiException.invalido("El documento no puede superar los 8 MB");
-        }
+        // El primer documento es el principal (columnas de licitacion); el resto va a documento_licitacion.
+        List<DocumentoDto> documentos = d.documentos() == null ? List.of() : d.documentos();
+        if (documentos.size() > MAX_DOCUMENTOS) throw ApiException.invalido("Puedes adjuntar hasta " + MAX_DOCUMENTOS + " documentos");
+        documentos.forEach(LicitacionService::validarArchivo);
+        if (documentos.stream().mapToLong(x -> x.contenido() == null ? 0 : x.contenido().length()).sum() > MAX_PUBLICAR_B64)
+            throw ApiException.invalido("Al publicar, los documentos no pueden sumar más de 16 MB. Agrega el resto desde el detalle de la licitación.");
+        DocumentoDto doc = documentos.isEmpty() ? null : documentos.get(0);
+        List<Map<String, Object>> adicionales = documentos.stream().skip(1).filter(x -> x.contenido() != null).map(LicitacionService::nuevoDoc).toList();
         Map<String, Object> nueva = new HashMap<>();
         nueva.put("licitadorId", licitadorId); nueva.put("titulo", d.titulo().trim()); nueva.put("descripcion", d.descripcion().trim());
         nueva.put("rubroId", d.rubroId()); nueva.put("regionId", d.regionId()); nueva.put("presupuestoMin", d.presupuestoMin()); nueva.put("presupuestoMax", d.presupuestoMax());
         nueva.put("maxPostulantes", d.maxPostulantes()); nueva.put("imagenUrl", d.imagenUrl()); nueva.put("fechaCierre", cierre);
         nueva.put("archivoNombre", doc == null ? null : doc.nombre()); nueva.put("tipoArchivo", doc == null ? null : doc.tipo());
-        nueva.put("archivoContenido", doc == null ? null : doc.contenido());
+        nueva.put("archivoContenido", doc == null ? null : doc.contenido()); nueva.put("adicionales", adicionales);
         Lic l = interno.post(urlBd + "/bd/licitaciones", nueva, Lic.class);
         interno.notificar(urlNotif, licitadorId, "Licitación publicada", "Licitación publicada", "Tu licitación \"" + l.titulo() + "\" ya es visible para las Pymes del rubro.", false);
         avisos.submit(() -> avisarPymesDelRubro(l));
@@ -195,11 +204,41 @@ public class LicitacionService {
 
     public LicitacionDto obtener(long id) { return dto(lic(id), new Ctx()); }
 
-    /** Documento adjunto para ver o descargar desde la plataforma (Licitador, Pyme o Admin con sesión). */
-    public ArchivoDto documento(long id) {
-        ArchivoDto a = interno.get(urlBd + "/bd/licitaciones/" + id + "/archivo", ArchivoDto.class);
+    /** Documento adjunto para ver o descargar desde la plataforma (Licitador, Pyme o Admin con sesión); docId null = el documento principal. */
+    public ArchivoDto documento(long id, Long docId) {
+        ArchivoDto a = interno.get(urlBd + "/bd/licitaciones/" + id + (docId == null ? "/archivo" : "/documentos/" + docId), ArchivoDto.class);
         if (a.contenido() == null) throw ApiException.noEncontrado("Este documento se publicó antes de que la plataforma guardara archivos, por lo que no está disponible.");
         return a;
+    }
+
+    /** El Licitador dueño agrega un documento a su licitación mientras siga abierta (p. ej. un anexo o una aclaración). */
+    public LicitacionDto agregarDocumento(long id, long usuarioId, DocumentoDto d) {
+        Lic l = lic(id);
+        if (l.licitadorId() != usuarioId) throw ApiException.prohibido("Solo el Licitador dueño puede agregar documentos");
+        if (!"Abierta".equals(estadoEfectivo(l))) throw ApiException.conflicto("Solo puedes agregar documentos mientras la licitación esté abierta");
+        if (d.contenido() == null) throw ApiException.invalido("Selecciona el archivo que quieres agregar");
+        validarArchivo(d);
+        return dto(interno.post(urlBd + "/bd/licitaciones/" + id + "/documentos?maxTotal=" + MAX_DOCUMENTOS, nuevoDoc(d), Lic.class), new Ctx());
+    }
+
+    /** El Licitador dueño quita un documento adicional mientras la licitación siga abierta (el principal se mantiene). */
+    public LicitacionDto quitarDocumento(long id, long docId, long usuarioId) {
+        Lic l = lic(id);
+        if (l.licitadorId() != usuarioId) throw ApiException.prohibido("Solo el Licitador dueño puede quitar documentos");
+        if (!"Abierta".equals(estadoEfectivo(l))) throw ApiException.conflicto("Solo puedes quitar documentos mientras la licitación esté abierta");
+        interno.delete(urlBd + "/bd/licitaciones/" + id + "/documentos/" + docId);
+        return obtener(id);
+    }
+
+    private static void validarArchivo(DocumentoDto d) {
+        if (d.contenido() == null) return;
+        if (!d.contenido().startsWith("data:") || !d.contenido().contains(";base64,")) throw ApiException.invalido("El documento \"" + d.nombre() + "\" no es válido");
+        if (d.contenido().length() > MAX_ARCHIVO_B64) throw ApiException.invalido("El documento \"" + d.nombre() + "\" supera los 8 MB");
+    }
+    private static Map<String, Object> nuevoDoc(DocumentoDto d) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("nombre", d.nombre().trim()); m.put("tipo", d.tipo()); m.put("contenido", d.contenido());
+        return m;
     }
     public List<LicitacionDto> mias(long licitadorId) { return dtos(lics("?licitadorId=" + licitadorId)); }
     public List<LicitacionDto> todas() { return dtos(lics("")); }

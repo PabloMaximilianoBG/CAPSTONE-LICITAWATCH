@@ -25,7 +25,12 @@ public class LicitacionBsController {
     @GetMapping("/bs/licitaciones/referencia") public ReferenciaPresupuesto referencia(@RequestParam int rubroId) { return svc.referencia(rubroId); }
     @GetMapping("/bs/licitaciones/todas") public List<LicitacionDto> todas() { return svc.todas(); }
     @GetMapping("/bs/licitaciones/{id}") public LicitacionDto obtener(@PathVariable long id) { return svc.obtener(id); }
-    @GetMapping("/bs/licitaciones/{id}/documento") public ArchivoDto documento(@PathVariable long id) { return svc.documento(id); }
+    @GetMapping("/bs/licitaciones/{id}/documento") public ArchivoDto documento(@PathVariable long id) { return svc.documento(id, null); }
+    @GetMapping("/bs/licitaciones/{id}/documentos/{docId}") public ArchivoDto documento(@PathVariable long id, @PathVariable long docId) { return svc.documento(id, docId); }
+    @PostMapping("/bs/licitaciones/{id}/documentos")
+    public LicitacionDto agregarDocumento(HttpServletRequest r, @PathVariable long id, @RequestBody DocumentoDto b) { return svc.agregarDocumento(id, Auth.sesion(r).usuarioId(), b); }
+    @DeleteMapping("/bs/licitaciones/{id}/documentos/{docId}")
+    public LicitacionDto quitarDocumento(HttpServletRequest r, @PathVariable long id, @PathVariable long docId) { return svc.quitarDocumento(id, docId, Auth.sesion(r).usuarioId()); }
 
     @PostMapping("/bs/licitaciones") @ResponseStatus(HttpStatus.CREATED)
     public LicitacionDto crear(HttpServletRequest r, @RequestBody NuevaLicitacion b) { return svc.crear(Auth.sesion(r).usuarioId(), b); }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
-import { PLAZO_MINIMO_DIAS, type AlcancePymes, type DocumentoLicitacion, type EstadoLicitacion, type Licitacion, type ReferenciaPresupuesto } from '../../api/types'
+import { MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, PLAZO_MINIMO_DIAS, type AlcancePymes, type DocumentoLicitacion, type EstadoLicitacion, type Licitacion, type ReferenciaPresupuesto } from '../../api/types'
 import { Button, Card, CardHeader, Cargando, EmptyState, Field, Input, PageHeader, Select, Tabs, Textarea, useAsync, useToast } from '../../components/ui/ui'
 import { TenderCard, VolverLink } from '../../components/app/shared'
 import { navigate } from '../../lib/router'
@@ -104,15 +104,23 @@ export function TenderForm() {
     r.onload = () => setImagen(String(r.result))
     r.readAsDataURL(f)
   }
-  // El ER guarda un documento por licitación (archivo_url): se sube el archivo real para que las Pymes lo vean o descarguen.
+  // Hasta MAX_DOCUMENTOS archivos reales (el primero queda como documento principal) para que las Pymes los vean o descarguen.
+  const totalBytes = docs.reduce((s, d) => s + d.tamanoKb * 1024, 0)
   const agregarDocs = (files: FileList | null) => {
-    const f = files?.[0]
-    if (!f) return
-    if (f.size > 8_000_000) { toast.error('El documento no puede superar los 8 MB.'); return }
-    const r = new FileReader()
-    r.onload = () => setDocs([{ nombre: f.name, tipo: tipoArchivo(f.name), tamanoKb: Math.max(1, Math.round(f.size / 1024)), contenido: String(r.result) }])
-    r.onerror = () => toast.error('No se pudo leer el documento.')
-    r.readAsDataURL(f)
+    const lista = Array.from(files ?? [])
+    const libres = MAX_DOCUMENTOS - docs.length
+    if (lista.length > libres) toast.error(`Puedes adjuntar hasta ${MAX_DOCUMENTOS} documentos. Se agregaron solo los primeros ${Math.max(0, libres)}.`)
+    let suma = totalBytes
+    for (const f of lista.slice(0, Math.max(0, libres))) {
+      if (f.size > MAX_DOCUMENTO_BYTES) { toast.error(`«${f.name}» supera los 8 MB.`); continue }
+      if (docs.some((d) => d.nombre === f.name)) { toast.error(`«${f.name}» ya está en la lista.`); continue }
+      if (suma + f.size > MAX_PUBLICAR_BYTES) { toast.error(`«${f.name}» no cabe: al publicar los documentos pueden sumar hasta 16 MB. Agrégalo después desde el detalle de la licitación.`); continue }
+      suma += f.size
+      const r = new FileReader()
+      r.onload = () => setDocs((ds) => [...ds, { nombre: f.name, tipo: tipoArchivo(f.name), tamanoKb: Math.max(1, Math.round(f.size / 1024)), contenido: String(r.result) }])
+      r.onerror = () => toast.error(`No se pudo leer «${f.name}».`)
+      r.readAsDataURL(f)
+    }
   }
 
   const publicar = async () => {
@@ -167,15 +175,17 @@ export function TenderForm() {
         </div>
       </Card>
       <Card>
-        <CardHeader icon="paperclip" title="Imagen y documentos" subtitle="Opcional · 1 documento (PDF, DOCX o XLSX, hasta 8 MB)" />
+        <CardHeader icon="paperclip" title="Imagen y documentos" subtitle={`Opcional · hasta ${MAX_DOCUMENTOS} documentos (PDF, DOCX o XLSX, hasta 8 MB cada uno)`} />
         <div className="upload-row">
           <div className="upload" onClick={() => refImg.current?.click()}>
             {imagen ? <img src={imagen} alt="Imagen de la licitación" /> : <><Icon name="image" size={26} /><b>Imagen de portada</b><small>JPG o PNG, hasta 2 MB</small></>}
             <input ref={refImg} type="file" accept="image/*" hidden onChange={(e) => subirImagen(e.target.files?.[0])} />
           </div>
-          <div className="upload upload-docs" onClick={() => refDoc.current?.click()}>
-            <Icon name="upload" size={26} /><b>{docs.length ? 'Cambiar documento' : 'Subir documento'}</b><small>Bases técnicas, contrato, anexos…</small>
-            <input ref={refDoc} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { agregarDocs(e.target.files); e.target.value = '' }} />
+          <div className={`upload upload-docs ${docs.length >= MAX_DOCUMENTOS ? 'lleno' : ''}`} onClick={() => docs.length < MAX_DOCUMENTOS && refDoc.current?.click()}>
+            <Icon name="upload" size={26} />
+            <b>{docs.length >= MAX_DOCUMENTOS ? 'Máximo de documentos' : docs.length ? 'Agregar otro documento' : 'Subir documentos'}</b>
+            <small>{docs.length ? `${docs.length} de ${MAX_DOCUMENTOS} · ` : ''}Bases técnicas, anexos, planos…</small>
+            <input ref={refDoc} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { agregarDocs(e.target.files); e.target.value = '' }} />
           </div>
         </div>
         {docs.length > 0 && (
@@ -183,7 +193,7 @@ export function TenderForm() {
             {docs.map((d, i) => (
               <li key={d.nombre + i}>
                 <span className="doc-ic"><Icon name="file" size={18} /></span>
-                <div><b>{d.nombre}</b><small>{d.tipo} · {d.tamanoKb} KB</small></div>
+                <div><b>{d.nombre}</b><small>{i === 0 ? 'Documento principal · ' : ''}{d.tipo} · {d.tamanoKb} KB</small></div>
                 <button className="icon-btn" onClick={() => setDocs(docs.filter((_, k) => k !== i))} aria-label="Quitar"><Icon name="x" size={16} /></button>
               </li>
             ))}

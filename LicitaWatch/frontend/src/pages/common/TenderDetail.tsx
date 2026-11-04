@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import { ApiError } from '../../api/errors'
-import type { Plan, Postulacion } from '../../api/types'
+import { MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, type DocumentoLicitacion, type Plan, type Postulacion } from '../../api/types'
 import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, Modal, Progress, Textarea, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
 import { VolverLink } from '../../components/app/shared'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
-import { diasHasta, fechaCorta, hace, rangoPresupuesto, clp } from '../../lib/format'
+import { diasHasta, fechaCorta, hace, rangoPresupuesto, clp, tipoArchivo } from '../../lib/format'
 
 export function TenderDetail({ id }: { id: number }) {
   const { sesion } = useAuth()
@@ -25,15 +25,20 @@ export function TenderDetail({ id }: { id: number }) {
   const [confirmar, setConfirmar] = useState<{ tipo: 'adjudicar' | 'cerrar' | 'eliminar'; p?: Postulacion } | null>(null)
   const [limite, setLimite] = useState(false)   // pop-up: alcanzó las postulaciones del mes
   const [premium, setPremium] = useState<Plan | null>(null)
-  const [cargandoDoc, setCargandoDoc] = useState<'ver' | 'descargar' | null>(null)
-  const [visor, setVisor] = useState<{ nombre: string; url: string; mime: string } | null>(null)
+  // Documento en curso: «ver-<clave>» o «descargar-<clave>» (clave = id del adicional o «p» para el principal).
+  const [cargandoDoc, setCargandoDoc] = useState<string | null>(null)
+  const [visor, setVisor] = useState<{ doc: DocumentoLicitacion; url: string; mime: string } | null>(null)
+  const [subiendoDoc, setSubiendoDoc] = useState(false)
+  const [quitarDoc, setQuitarDoc] = useState<DocumentoLicitacion | null>(null)
+  const refDoc = useRef<HTMLInputElement>(null)
   useEffect(() => () => { if (visor) URL.revokeObjectURL(visor.url) }, [visor])
 
+  const clave = (d: DocumentoLicitacion) => d.id ?? 'p'
   /** Pide el archivo (con la sesión) y lo muestra en la plataforma o lo descarga. */
-  const abrirDocumento = async (modo: 'ver' | 'descargar') => {
-    setCargandoDoc(modo)
+  const abrirDocumento = async (d: DocumentoLicitacion, modo: 'ver' | 'descargar') => {
+    setCargandoDoc(`${modo}-${clave(d)}`)
     try {
-      const a = await api.documentoLicitacion(id)
+      const a = await api.documentoLicitacion(id, d.id)
       const blob = await (await fetch(a.contenido)).blob()
       const url = URL.createObjectURL(blob)
       if (modo === 'descargar') {
@@ -41,8 +46,30 @@ export function TenderDetail({ id }: { id: number }) {
         link.href = url; link.download = a.nombre
         document.body.appendChild(link); link.click(); link.remove()
         setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      } else setVisor({ nombre: a.nombre, url, mime: blob.type })
+      } else setVisor({ doc: d, url, mime: blob.type })
     } catch (e) { toast.error((e as Error).message) } finally { setCargandoDoc(null) }
+  }
+
+  /** El Licitador dueño agrega un documento a su licitación abierta. */
+  const subirDocumento = (f?: File) => {
+    if (!f) return
+    if (f.size > MAX_DOCUMENTO_BYTES) { toast.error('El documento no puede superar los 8 MB.'); return }
+    const r = new FileReader()
+    r.onload = async () => {
+      setSubiendoDoc(true)
+      try {
+        lic.setData(await api.agregarDocumento(id, { nombre: f.name, tipo: tipoArchivo(f.name), tamanoKb: Math.max(1, Math.round(f.size / 1024)), contenido: String(r.result) }))
+        toast.ok(`Documento «${f.name}» agregado. Las Pymes ya pueden verlo.`)
+      } catch (e) { toast.error((e as Error).message) } finally { setSubiendoDoc(false) }
+    }
+    r.onerror = () => toast.error('No se pudo leer el documento.')
+    r.readAsDataURL(f)
+  }
+  const ejecutarQuitarDoc = async () => {
+    if (!quitarDoc?.id) return
+    try { lic.setData(await api.quitarDocumento(id, quitarDoc.id)); toast.ok('Documento quitado.') }
+    catch (e) { toast.error((e as Error).message) }
+    setQuitarDoc(null)
   }
 
   if (lic.loading) return <Cargando />
@@ -51,6 +78,7 @@ export function TenderDetail({ id }: { id: number }) {
   const miPost = mias.data?.find((p) => p.licitacionId === l.id)
   const dias = diasHasta(l.fechaCierre)
   const abierta = l.estado === 'Abierta' && dias >= 0
+  const puedeEditarDocs = esDueno && abierta
   const restantes = sub.data ? Math.max(0, sub.data.plan.postulacionesMes - sub.data.postulacionesUsadas) : 0
   const volver = rol === 'PYME' ? { to: '/app/explorar', t: 'Explorar licitaciones' } : rol === 'ADMIN' ? { to: '/app/licitaciones-admin', t: 'Licitaciones' } : { to: '/app/licitaciones', t: 'Mis licitaciones' }
 
@@ -115,15 +143,21 @@ export function TenderDetail({ id }: { id: number }) {
             <p className="prose">{l.descripcion}</p>
           </Card>
           <Card>
-            <CardHeader icon="paperclip" title="Documentos adjuntos" />
-            {l.documentos.length === 0 ? <p className="muted-p">El Licitador no adjuntó documentos.</p> : (
+            <CardHeader icon="paperclip" title={`Documentos adjuntos${l.documentos.length ? ` (${l.documentos.length})` : ''}`}
+              subtitle={puedeEditarDocs ? `Puedes agregar hasta ${MAX_DOCUMENTOS} documentos mientras la licitación esté abierta.` : undefined}
+              action={puedeEditarDocs && l.documentos.length < MAX_DOCUMENTOS ? <>
+                <Button size="sm" variant="soft" icon="upload" loading={subiendoDoc} onClick={() => refDoc.current?.click()}>Agregar documento</Button>
+                <input ref={refDoc} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" hidden onChange={(e) => { subirDocumento(e.target.files?.[0]); e.target.value = '' }} />
+              </> : undefined} />
+            {l.documentos.length === 0 ? <p className="muted-p">{puedeEditarDocs ? 'Aún no adjuntas documentos. Agrega bases técnicas, anexos o planos para que las Pymes postulen mejor informadas.' : 'El Licitador no adjuntó documentos.'}</p> : (
               <ul className="doc-list">
                 {l.documentos.map((d) => (
-                  <li key={d.nombre}>
-                    <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
+                  <li key={clave(d)}>
+                    <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.id == null && l.documentos.length > 1 ? 'Documento principal · ' : ''}{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
                     <div className="doc-acciones">
-                      <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === 'ver'} disabled={!!cargandoDoc} onClick={() => abrirDocumento('ver')}>Ver</Button>
-                      <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === 'descargar'} disabled={!!cargandoDoc} onClick={() => abrirDocumento('descargar')}>Descargar</Button>
+                      <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'ver')}>Ver</Button>
+                      <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'descargar')}>Descargar</Button>
+                      {puedeEditarDocs && d.id != null && <button className="icon-btn" onClick={() => setQuitarDoc(d)} aria-label={`Quitar ${d.nombre}`} title="Quitar documento"><Icon name="trash" size={16} /></button>}
                     </div>
                   </li>
                 ))}
@@ -250,12 +284,17 @@ export function TenderDetail({ id }: { id: number }) {
             : <p>La licitación <b>{l.titulo}</b> dejará de recibir postulaciones. Esta acción no se puede deshacer.</p>}
       </Modal>
 
-      <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.nombre ?? 'Documento'} ancho={980}
-        pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button><Button icon="download" onClick={() => abrirDocumento('descargar')} loading={cargandoDoc === 'descargar'}>Descargar</Button></>}>
+      <Modal abierto={!!quitarDoc} onClose={() => setQuitarDoc(null)} titulo="Quitar documento" ancho={480}
+        pie={<><Button variant="ghost" onClick={() => setQuitarDoc(null)}>Cancelar</Button><Button variant="danger" icon="trash" onClick={ejecutarQuitarDoc}>Sí, quitar</Button></>}>
+        <p>Vas a quitar <b>{quitarDoc?.nombre}</b> de la licitación. Las Pymes ya no podrán verlo ni descargarlo.</p>
+      </Modal>
+
+      <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.doc.nombre ?? 'Documento'} ancho={980}
+        pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button>{visor && <Button icon="download" onClick={() => abrirDocumento(visor.doc, 'descargar')} loading={cargandoDoc === `descargar-${clave(visor.doc)}`}>Descargar</Button>}</>}>
         {visor && (visor.mime === 'application/pdf'
-          ? <iframe className="doc-visor" src={visor.url} title={visor.nombre} />
+          ? <iframe className="doc-visor" src={visor.url} title={visor.doc.nombre} />
           : visor.mime.startsWith('image/')
-            ? <img className="doc-visor-img" src={visor.url} alt={visor.nombre} />
+            ? <img className="doc-visor-img" src={visor.url} alt={visor.doc.nombre} />
             : <EmptyState icon="file" titulo="Este formato no se puede previsualizar" texto="Los archivos Word y Excel no se muestran en el navegador. Descárgalo para abrirlo en tu computador." />)}
       </Modal>
     </div>

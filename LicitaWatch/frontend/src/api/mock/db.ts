@@ -221,7 +221,7 @@ function seed(): DB {
     db.licitaciones.push({
       id: nextId(db, 'licitacion'), licitadorId: licIds[i % licIds.length], titulo: p[0], descripcion: p[3],
       rubroId: rubroPorNombre(p[1]), regionId: regionPorNombre(p[2]), presupuestoMin: p[4], presupuestoMax: p[5], maxPostulantes: p[6] + 4,
-      documentos: i % 3 === 0 ? [{ nombre: 'Bases_tecnicas.pdf', tipo: 'PDF', tamanoKb: 420 + i * 13 }, { nombre: 'Anexo_economico.xlsx', tipo: 'XLSX', tamanoKb: 96 }] : i % 3 === 1 ? [{ nombre: 'Bases_administrativas.pdf', tipo: 'PDF', tamanoKb: 310 + i * 9 }] : [],
+      documentos: i % 3 === 0 ? [{ nombre: 'Bases_tecnicas.pdf', tipo: 'PDF', tamanoKb: 420 + i * 13 }, { id: nextId(db, 'documento'), nombre: 'Anexo_economico.xlsx', tipo: 'XLSX', tamanoKb: 96 }] : i % 3 === 1 ? [{ nombre: 'Bases_administrativas.pdf', tipo: 'PDF', tamanoKb: 310 + i * 9 }] : [],
       fechaCierre: iso(cierre), estado, createdAt: iso(now - (6 + i * 2) * DAY),
     })
   })
