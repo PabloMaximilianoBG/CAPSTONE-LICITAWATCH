@@ -11,7 +11,10 @@ import cl.licitawatch.usuarios.bs.UsuariosBd.UsuarioFila;
  */
 public final class Mapeo {
     private Mapeo() {}
-    public static UsuarioDto usuario(UsuarioFila u) { return new UsuarioDto(u.id(), u.email(), u.rol(), u.activo(), u.emailVerificado(), u.createdAt(), u.ultimoLogin(), u.foto()); }
+    public static UsuarioDto usuario(UsuarioFila u) {
+        return new UsuarioDto(u.id(), u.email(), u.rol(), u.activo(), u.emailVerificado(), u.createdAt(), u.ultimoLogin(), u.foto(),
+                u.aceptaTerminos(), u.terminosAceptadosAt(), u.versionTerminos(), u.versionPolitica());
+    }
 
     public static PerfilDto perfil(PerfilFila p) {
         if (!p.esEmpresa()) return new PerfilDto(p.usuarioId(), "LicitaWatch", "", "", p.nombre(), "", null, null, null, null, null, null, null, false, null);

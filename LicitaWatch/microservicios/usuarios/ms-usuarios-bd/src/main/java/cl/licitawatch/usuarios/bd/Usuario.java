@@ -16,6 +16,10 @@ public class Usuario {
     @Column(name = "created_at", nullable = false) private Instant createdAt = Instant.now();
     @Column(columnDefinition = "TEXT") private String foto;   // foto de perfil: data URL JPEG 256x256 (null = iniciales)
     @Column(name = "ultimo_login") private Instant ultimoLogin;   // último inicio de sesión correcto (null = nunca)
+    @Column(name = "acepta_terminos", nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE") private boolean aceptaTerminos = true;
+    @Column(name = "terminos_aceptados_at") private Instant terminosAceptadosAt;
+    @Column(name = "version_terminos", nullable = false, length = 32, columnDefinition = "VARCHAR(32) NOT NULL DEFAULT '1.0'") private String versionTerminos = "1.0";
+    @Column(name = "version_politica", nullable = false, length = 32, columnDefinition = "VARCHAR(32) NOT NULL DEFAULT '1.0'") private String versionPolitica = "1.0";
 
     public Long getId() { return id; } public void setId(Long id) { this.id = id; }
     public String getEmail() { return email; } public void setEmail(String email) { this.email = email; }
@@ -27,4 +31,8 @@ public class Usuario {
     public Instant getCreatedAt() { return createdAt; } public void setCreatedAt(Instant c) { this.createdAt = c; }
     public String getFoto() { return foto; } public void setFoto(String foto) { this.foto = foto; }
     public Instant getUltimoLogin() { return ultimoLogin; } public void setUltimoLogin(Instant t) { this.ultimoLogin = t; }
+    public boolean isAceptaTerminos() { return aceptaTerminos; } public void setAceptaTerminos(boolean a) { this.aceptaTerminos = a; }
+    public Instant getTerminosAceptadosAt() { return terminosAceptadosAt; } public void setTerminosAceptadosAt(Instant t) { this.terminosAceptadosAt = t; }
+    public String getVersionTerminos() { return versionTerminos; } public void setVersionTerminos(String v) { this.versionTerminos = v; }
+    public String getVersionPolitica() { return versionPolitica; } public void setVersionPolitica(String v) { this.versionPolitica = v; }
 }

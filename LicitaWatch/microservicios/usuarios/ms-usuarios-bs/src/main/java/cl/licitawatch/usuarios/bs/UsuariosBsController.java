@@ -69,4 +69,15 @@ public class UsuariosBsController {
     public void estado(@PathVariable long id, @RequestBody Estado b) { admin.cambiarEstado(id, b.activo()); }
     @DeleteMapping("/admin/usuarios/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void eliminar(@PathVariable long id) { admin.eliminar(id); }
+
+    // ---------- configuración legal ----------
+    @GetMapping("/config/legal")
+    public UsuariosBd.ConfigLegalFila configLegalGet() { return bd.configLegal(); }
+
+    public record ConfigLegalBody(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {}
+    @PutMapping("/config/legal")
+    public UsuariosBd.ConfigLegalFila configLegalPut(@RequestBody ConfigLegalBody b) {
+        return bd.guardarConfigLegal(b.urlTerminos(), b.urlPolitica(), b.versionTerminos(), b.versionPolitica());
+    }
 }
+

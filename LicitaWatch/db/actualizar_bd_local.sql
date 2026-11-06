@@ -13,6 +13,7 @@
 \ir migracion_foto_perfil.sql
 \ir migracion_email_verificado.sql
 \ir migracion_ultimo_login.sql
+\ir migracion_terminos_legales.sql
 
 \echo '== licitawatch_licitaciones'
 \c licitawatch_licitaciones

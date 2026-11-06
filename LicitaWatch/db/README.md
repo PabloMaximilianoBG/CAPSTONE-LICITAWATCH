@@ -32,6 +32,7 @@ psql -U postgres -d licitawatch_usuarios -f db/migracion_ciudades_rm.sql      # 
 psql -U postgres -d licitawatch_usuarios -f db/migracion_foto_perfil.sql      # foto de perfil (usuario.foto)
 psql -U postgres -d licitawatch_usuarios -f db/migracion_email_verificado.sql # verificación de correo al registrarse (usuario.email_verificado)
 psql -U postgres -d licitawatch_usuarios -f db/migracion_ultimo_login.sql     # último acceso del usuario (usuario.ultimo_login)
+psql -U postgres -d licitawatch_usuarios -f db/migracion_terminos_legales.sql # aceptación y versiones de Términos y Política de Privacidad
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_postulacion_archivada.sql  # la Pyme archiva postulaciones (postulacion.archivada)
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_documentos_licitacion.sql  # varios documentos por licitación (tabla documento_licitacion)
 psql -U postgres -d licitawatch_ventas   -f db/migracion_precio_planes.sql     # precio de los planes editable por el admin (plan_suscripcion.precio_mensual, plan_precio_historial)

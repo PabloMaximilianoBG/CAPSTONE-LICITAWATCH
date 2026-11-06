@@ -18,12 +18,14 @@ public final class Dto {
             @NotBlank @Email String email, @NotBlank String password, @NotBlank String razonSocial,
             @NotBlank String rutEmpresa, @NotBlank String rutPersona, @NotBlank String nombreContacto,
             @NotBlank @Email String emailContacto, String telefono, @NotNull Integer rubroId, @NotNull Integer ciudadId,
-            Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, String giro, boolean siiValidado) {}
+            Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, String giro, boolean siiValidado,
+            boolean aceptaTerminos, String versionTerminos, String versionPolitica) {}
 
     public record PerfilEdicion(String razonSocial, String giro, Integer rubroId, Integer tamanoEmpresaId, Integer ciudadId, String nombreContacto,
                                 String emailContacto, String telefono, String sitioWeb, String descripcionEmpresa) {}
 
-    public record UsuarioDto(Long id, String email, String rol, boolean activo, boolean emailVerificado, Instant createdAt, Instant ultimoLogin, String foto) {}
+    public record UsuarioDto(Long id, String email, String rol, boolean activo, boolean emailVerificado, Instant createdAt, Instant ultimoLogin, String foto,
+                             boolean aceptaTerminos, Instant terminosAceptadosAt, String versionTerminos, String versionPolitica) {}
     public record Foto(@NotBlank String foto) {}
     public record PerfilDto(Long usuarioId, String razonSocial, String rutEmpresa, String rutPersona, String nombreContacto, String emailContacto,
                             String telefono, Integer rubroId, Integer ciudadId, Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb,

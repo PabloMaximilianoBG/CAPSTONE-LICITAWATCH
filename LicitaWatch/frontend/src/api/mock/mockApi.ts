@@ -146,6 +146,7 @@ const serie = (fechas: string[], n = 6): PuntoMensual[] =>
   ultimosMeses(n).map((m) => ({ mes: m.etiqueta, valor: fechas.filter((f) => { const t = new Date(f).getTime(); return t >= m.desde && t < m.hasta }).length }))
 
 function registrar(db: DB, d: RegistroLicitador, rol: 'LICITADOR' | 'PYME', tamano?: number): RegistroOk {
+  if (!d.aceptaTerminos) throw new ApiError('Debes aceptar los Términos y Condiciones y la Política de Privacidad de LicitaWatch.', 422)
   if (!validarEmail(d.email)) throw new ApiError('El correo no es válido.', 422)
   const errPass = validarPassword(d.password)
   if (errPass) throw new ApiError(`Contraseña insegura: ${errPass.toLowerCase()}.`, 422)
@@ -158,7 +159,13 @@ function registrar(db: DB, d: RegistroLicitador, rol: 'LICITADOR' | 'PYME', tama
   // "Transacción": todo o nada
   const copia = clon(db)
   try {
-    const usuario: UsuarioDB = { id: nextId(db, 'usuario'), email: d.email.trim().toLowerCase(), password: d.password, rol, activo: true, emailVerificado: false, createdAt: ahora() }
+    const fechaAceptacion = ahora()
+    const usuario: UsuarioDB = {
+      id: nextId(db, 'usuario'), email: d.email.trim().toLowerCase(), password: d.password, rol, activo: true, emailVerificado: false, createdAt: fechaAceptacion,
+      aceptaTerminos: true, terminosAceptadosAt: fechaAceptacion,
+      versionTerminos: d.versionTerminos ?? db.configLegal?.versionTerminos ?? '1.0',
+      versionPolitica: d.versionPolitica ?? db.configLegal?.versionPolitica ?? '1.0',
+    }
     db.usuarios.push(usuario)
     db.perfiles.push({
       usuarioId: usuario.id, razonSocial: d.razonSocial.trim(), rutEmpresa: d.rutEmpresa, rutPersona: d.rutPersona,
@@ -846,5 +853,29 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     await delay(120)
     exigir(loadDb(), 'ADMIN')
     return clon(historialPrecios)
+  },
+
+  async configLegal() {
+    await delay(80)
+    const cfg = loadDb().configLegal
+    return {
+      urlTerminos: cfg?.urlTerminos || '/terminos-y-condiciones',
+      urlPolitica: cfg?.urlPolitica || '/politica-de-privacidad',
+      versionTerminos: cfg?.versionTerminos || '1.0',
+      versionPolitica: cfg?.versionPolitica || '1.0',
+    }
+  },
+  async guardarConfigLegal(d) {
+    await delay(300)
+    const db = loadDb()
+    exigir(db, 'ADMIN')
+    db.configLegal = {
+      urlTerminos: d.urlTerminos ?? '/terminos-y-condiciones',
+      urlPolitica: d.urlPolitica ?? '/politica-de-privacidad',
+      versionTerminos: d.versionTerminos ?? db.configLegal?.versionTerminos ?? '1.0',
+      versionPolitica: d.versionPolitica ?? db.configLegal?.versionPolitica ?? '1.0',
+    }
+    saveDb()
+    return clon(db.configLegal)
   },
 }

@@ -40,7 +40,19 @@ CREATE TABLE IF NOT EXISTS usuario (                -- 1 rol -> N usuarios
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   foto       TEXT,                                  -- foto de perfil (data URL JPEG 256x256); NULL = se muestran las iniciales
   ultimo_login TIMESTAMPTZ,                         -- último inicio de sesión correcto; NULL = nunca ha entrado
+  acepta_terminos BOOLEAN NOT NULL DEFAULT TRUE,    -- aceptación obligatoria de Términos y Política al registrarse
+  terminos_aceptados_at TIMESTAMPTZ,                -- fecha/hora de aceptación de los documentos legales
+  version_terminos VARCHAR(32) NOT NULL DEFAULT '1.0', -- versión aceptada de Términos y Condiciones
+  version_politica VARCHAR(32) NOT NULL DEFAULT '1.0', -- versión aceptada de Política de Privacidad
   CONSTRAINT uq_usuario_email UNIQUE (email)
+);
+
+CREATE TABLE IF NOT EXISTS config_legal (           -- singleton (id = 1): rutas y versiones vigentes de documentos legales
+  id               INTEGER PRIMARY KEY DEFAULT 1,
+  url_terminos     VARCHAR(512) DEFAULT '/terminos-y-condiciones',
+  url_politica     VARCHAR(512) DEFAULT '/politica-de-privacidad',
+  version_terminos VARCHAR(32) NOT NULL DEFAULT '1.0',
+  version_politica VARCHAR(32) NOT NULL DEFAULT '1.0'
 );
 
 -- ===== Perfiles (1 usuario -> 1 perfil) =====
@@ -91,6 +103,9 @@ CREATE TABLE IF NOT EXISTS pyme (
 
 -- ===== Datos de catálogo =====
 INSERT INTO rol (nombre) VALUES ('LICITADOR'), ('PYME'), ('ADMIN') ON CONFLICT DO NOTHING;
+INSERT INTO config_legal (id, url_terminos, url_politica, version_terminos, version_politica)
+VALUES (1, '/terminos-y-condiciones', '/politica-de-privacidad', '1.0', '1.0')
+ON CONFLICT (id) DO NOTHING;
 INSERT INTO tamano_empresa (nombre) VALUES ('Pequeña'), ('Mediana'), ('Grande') ON CONFLICT DO NOTHING;
 INSERT INTO rubro (nombre) VALUES
   ('Aseo y Mantención'),

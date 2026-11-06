@@ -16,7 +16,9 @@ public final class Dto {
             @NotBlank @Email String email, @NotBlank String password, @NotBlank String razonSocial,
             @NotBlank String rutEmpresa, @NotBlank String rutPersona, @NotBlank String nombreContacto,
             @NotBlank @Email String emailContacto, String telefono, @NotNull Integer rubroId, @NotNull Integer ciudadId,
-            Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, String giro, boolean siiValidado) {}
+            Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, String giro, boolean siiValidado,
+            @AssertTrue(message = "Debes aceptar los Términos y Condiciones y la Política de Privacidad de LicitaWatch") boolean aceptaTerminos,
+            String versionTerminos, String versionPolitica) {}
 
     public record PerfilEdicion(String razonSocial, String giro, Integer rubroId, Integer tamanoEmpresaId, Integer ciudadId, String nombreContacto,
                                 String emailContacto, String telefono, String sitioWeb, String descripcionEmpresa) {}

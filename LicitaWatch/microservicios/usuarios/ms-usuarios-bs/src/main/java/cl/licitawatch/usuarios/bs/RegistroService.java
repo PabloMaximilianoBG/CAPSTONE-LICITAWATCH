@@ -22,6 +22,7 @@ public class RegistroService {
      * La cuenta queda sin verificar: no se inicia sesión y, ya guardada, se envía el enlace de verificación al correo de acceso. 201 / 400 / 409.
      */
     public RegistroOk registrar(String rol, Registro d) {
+        if (!d.aceptaTerminos()) throw ApiException.invalido("Debes aceptar los Términos y Condiciones y la Política de Privacidad de LicitaWatch");
         String msg = AuthService.validarPassword(d.password());
         if (msg != null) throw ApiException.invalido(msg);
         String rut = Rut.limpiar(d.rutEmpresa());
@@ -38,9 +39,18 @@ public class RegistroService {
         // No confiamos en el flag del cliente: se vuelve a consultar al SII. Si el SII no responde, se registra igual.
         try { sii.consultar(rut); } catch (ApiException e) { /* pasa sin verificar */ }
 
+        String vTerm = noVacio(d.versionTerminos()), vPol = noVacio(d.versionPolitica());
+        if (vTerm == null || vPol == null) {
+            try {
+                UsuariosBd.ConfigLegalFila cfg = bd.configLegal();
+                if (vTerm == null) vTerm = noVacio(cfg.versionTerminos());
+                if (vPol == null) vPol = noVacio(cfg.versionPolitica());
+            } catch (Exception ignored) { }
+        }
+
         PerfilFila perfil = new PerfilFila(null, rol, d.razonSocial().trim(), rut, rutPersona, d.nombreContacto().trim(), d.emailContacto().trim(), d.telefono() == null ? "" : d.telefono(),
                 d.rubroId(), d.ciudadId(), pyme ? d.tamanoEmpresaId() : null, d.descripcionEmpresa() == null ? "" : d.descripcionEmpresa(), d.sitioWeb(), null, null, null);
-        UsuarioFila u = bd.crear(d.email().trim().toLowerCase(), auth.hash(d.password()), rol, false, perfil);
+        UsuarioFila u = bd.crear(d.email().trim().toLowerCase(), auth.hash(d.password()), rol, false, true, vTerm != null ? vTerm : "1.0", vPol != null ? vPol : "1.0", perfil);
 
         // Ya guardado (la capa BD hizo COMMIT): Notificaciones puede consultar el correo del usuario.
         auth.enviarVerificacion(u);

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { api, USE_MOCK } from '../../api'
-import type { ConsultaSii } from '../../api/types'
+import { VERSION_POLITICA, VERSION_TERMINOS, type ConsultaSii } from '../../api/types'
 import { Link, navigate } from '../../lib/router'
 import { Logo } from '../../components/layout/Logo'
 import { PublicPage } from '../../components/layout/PublicLayout'
 import { MapaChileVivo } from '../../components/layout/EscenasAuth'
 import { MediaVideo } from '../../components/layout/MediaVideo'
-import { Accordion, Badge, Button, Field, Input, Select, Textarea, useToast } from '../../components/ui/ui'
+import { Accordion, Badge, Button, Field, Input, Select, Textarea, useAsync, useToast } from '../../components/ui/ui'
 import { Icon } from '../../lib/icons'
 import { esRutEmpresa, esRutPersona, formatearRut, limpiarRut, validarRut } from '../../lib/rut'
 import { validarEmail, validarPassword } from '../../lib/format'
@@ -53,6 +53,7 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
   const toast = useToast()
   const [abierto, setAbierto] = useState<Paso>(0)
   const [enviando, setEnviando] = useState(false)
+  const { data: legal } = useAsync(() => api.configLegal(), [])
 
   // Paso 1: persona
   const [nombres, setNombres] = useState('')
@@ -119,8 +120,8 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
     apellidos: apellidos.trim().length < 2 ? 'Ingresa tus apellidos' : null,
     rutPersona: !rutPersona ? 'Ingresa tu RUT personal'
       : !validarRut(rutPersona) ? 'RUT inválido (revisa el dígito verificador)'
-      : !esRutPersona(rutPersona) ? 'Ingresa tu RUT personal, no el de la empresa'
-      : rutPersonaOk === false ? 'Ese RUT personal ya está registrado en otra cuenta' : null,
+        : !esRutPersona(rutPersona) ? 'Ingresa tu RUT personal, no el de la empresa'
+          : rutPersonaOk === false ? 'Ese RUT personal ya está registrado en otra cuenta' : null,
     emailContacto: !validarEmail(emailContacto) ? 'Correo inválido' : null,
     telefono: (() => { const d = telefono.replace(/\D/g, ''); return d.length !== 9 ? 'Ingresa 9 dígitos (ej: 9 1234 5678)' : !d.startsWith('9') ? 'El celular debe empezar con 9' : null })(),
     regionId: !regionId ? 'Selecciona una región' : null,
@@ -133,7 +134,7 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
     email: !validarEmail(email) ? 'Correo inválido' : emailOk === false ? 'Ese correo ya tiene una cuenta' : null,
     password: validarPassword(password) || null,
     password2: !password2 ? 'Repite la contraseña' : password !== password2 ? 'Las contraseñas no coinciden' : null,
-    terminos: !terminos ? 'Debes aceptar los términos' : null,
+    terminos: !terminos ? 'Debes aceptar los Términos y Condiciones y la Política de Privacidad' : null,
   }
   const CAMPOS: string[][] = [
     ['nombres', 'apellidos', 'rutPersona', 'emailContacto', 'telefono'],
@@ -182,6 +183,9 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
       email, password, razonSocial, rutEmpresa, rutPersona, nombreContacto: `${nombres.trim()} ${apellidos.trim()}`,
       emailContacto, telefono: `+56 ${telefono.replace(/\D/g, '')}`, rubroId, ciudadId, descripcionEmpresa: descripcion,
       sitioWeb: sitioWeb || undefined, giro: sii?.giro, siiValidado: true,
+      aceptaTerminos: terminos,
+      versionTerminos: legal?.versionTerminos || VERSION_TERMINOS,
+      versionPolitica: legal?.versionPolitica || VERSION_POLITICA,
     }
     try {
       const r = esPyme ? await api.registrarPyme({ ...base, tamanoEmpresaId: tamanoId }) : await api.registrarLicitador(base)
@@ -193,6 +197,7 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
       if (m.includes('rut personal') || m.includes('rut de la persona')) { setRutPersonaOk(false); setAbierto(0) }
       else if (m.includes('rut de esa empresa') || m.includes('rut de la empresa') || m.includes('sii')) setAbierto(2)
       else if (m.includes('correo')) { setEmailOk(false); setAbierto(3) }
+      else if (m.includes('términos') || m.includes('terminos') || m.includes('política') || m.includes('politica')) setAbierto(3)
     } finally {
       setEnviando(false)
     }
@@ -312,8 +317,30 @@ export function RegisterForm({ rol }: { rol: 'LICITADOR' | 'PYME' }) {
                 <Input icon="lock" type={verPass ? 'text' : 'password'} value={password2} onChange={(e) => setPassword2(e.target.value)} onBlur={() => ver('password2')} autoComplete="new-password" />
               </Field>
               <label className={`check ${errorDe('terminos') ? 'err' : ''}`}>
-                <input type="checkbox" checked={terminos} onChange={(e) => setTerminos(e.target.checked)} />
-                <span>Acepto los términos y la política de privacidad de LicitaWatch.</span>
+                <input type="checkbox" checked={terminos} onChange={(e) => { setTerminos(e.target.checked); ver('terminos') }} />
+                <span>
+                  He leído y acepto los{' '}
+                  <a
+                    href={legal?.urlTerminos || '/terminos-y-condiciones'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="legal-link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Términos y Condiciones
+                  </a>{' '}
+                  y la{' '}
+                  <a
+                    href={legal?.urlPolitica || '/politica-de-privacidad'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="legal-link"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Política de Privacidad
+                  </a>{' '}
+                  de LicitaWatch.
+                </span>
               </label>
               {errorDe('terminos') && <span className="field-msg err"><Icon name="alert" size={14} />{err.terminos}</span>}
               <Button type="submit" size="lg" block loading={enviando} iconRight="arrowright">Crear cuenta</Button>

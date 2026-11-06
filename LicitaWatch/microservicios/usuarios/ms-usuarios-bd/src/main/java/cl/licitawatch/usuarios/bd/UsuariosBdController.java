@@ -18,11 +18,12 @@ import java.util.Optional;
 @RequestMapping("/bd")
 public class UsuariosBdController {
     /** password = hash bcrypt (lo calcula la capa BS; aquí nunca llega la clave en texto plano). */
-    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin) {}
+    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin,
+                              boolean aceptaTerminos, Instant terminosAceptadosAt, String versionTerminos, String versionPolitica) {}
     /** Perfil de la tabla que corresponde al rol. tipo = LICITADOR | PYME | ADMIN; nombre y area solo aplican al administrador. */
     public record PerfilFila(Long usuarioId, String tipo, String razonSocial, String rut, String rutPersona, String nombreContacto, String emailContacto, String telefono,
                              Integer rubroId, Integer ciudadId, Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, Instant updatedAt, String nombre, String area) {}
-    public record NuevoUsuario(String email, String password, String rol, boolean emailVerificado, PerfilFila perfil) {}
+    public record NuevoUsuario(String email, String password, String rol, boolean emailVerificado, boolean aceptaTerminos, String versionTerminos, String versionPolitica, PerfilFila perfil) {}
     /** Campos que se cambian; los null no se tocan. */
     public record CambiosUsuario(Boolean activo, Boolean emailVerificado, String password) {}
     public record Foto(String foto) {}
@@ -31,15 +32,21 @@ public class UsuariosBdController {
 
     private final UsuarioRepo usuarios; private final RolRepo roles; private final LicitadorRepo licitadores; private final PymeRepo pymes; private final AdministradorRepo admins;
     private final RubroRepo rubros; private final RegionRepo regiones; private final CiudadRepo ciudades; private final TamanoRepo tamanos;
+    private final ConfigLegalRepo configLegal;
 
     public UsuariosBdController(UsuarioRepo usuarios, RolRepo roles, LicitadorRepo licitadores, PymeRepo pymes, AdministradorRepo admins,
-                                RubroRepo rubros, RegionRepo regiones, CiudadRepo ciudades, TamanoRepo tamanos) {
+                                RubroRepo rubros, RegionRepo regiones, CiudadRepo ciudades, TamanoRepo tamanos, ConfigLegalRepo configLegal) {
         this.usuarios = usuarios; this.roles = roles; this.licitadores = licitadores; this.pymes = pymes; this.admins = admins;
-        this.rubros = rubros; this.regiones = regiones; this.ciudades = ciudades; this.tamanos = tamanos;
+        this.rubros = rubros; this.regiones = regiones; this.ciudades = ciudades; this.tamanos = tamanos; this.configLegal = configLegal;
     }
 
+    public record ConfigLegalFila(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {}
+
     // ---------- mapeo ----------
-    private static UsuarioFila fila(Usuario u) { return new UsuarioFila(u.getId(), u.getEmail(), u.getPassword(), u.getRolNombre(), u.isActivo(), u.isEmailVerificado(), u.getCreatedAt(), u.getFoto(), u.getUltimoLogin()); }
+    private static UsuarioFila fila(Usuario u) {
+        return new UsuarioFila(u.getId(), u.getEmail(), u.getPassword(), u.getRolNombre(), u.isActivo(), u.isEmailVerificado(), u.getCreatedAt(), u.getFoto(), u.getUltimoLogin(),
+                u.isAceptaTerminos(), u.getTerminosAceptadosAt(), u.getVersionTerminos(), u.getVersionPolitica());
+    }
     private static PerfilFila fila(PerfilBase p, String tipo) {
         return new PerfilFila(p.getUsuarioId(), tipo, p.getRazonSocial(), p.getRut(), p.getRutPersona(), p.getNombreContacto(), p.getEmailContacto(), p.getTelefono(),
                 p.getRubroId(), p.getCiudadId(), p.getTamanoEmpresaId(), p.getDescripcionEmpresa(), p.getSitioWeb(), p.getUpdatedAt(), null, null);
@@ -70,9 +77,14 @@ public class UsuariosBdController {
      */
     @PostMapping("/usuarios") @ResponseStatus(HttpStatus.CREATED) @Transactional
     public UsuarioFila crear(@RequestBody NuevoUsuario d) {
+        if (!d.aceptaTerminos()) throw ApiException.invalido("Debes aceptar los Términos y Condiciones y la Política de Privacidad de LicitaWatch");
         if (usuarios.existsByEmailIgnoreCase(d.email())) throw ApiException.conflicto("Ya existe una cuenta con ese correo");
         Usuario u = new Usuario();
         u.setEmail(d.email()); u.setPassword(d.password()); u.setEmailVerificado(d.emailVerificado());
+        u.setAceptaTerminos(true);
+        u.setTerminosAceptadosAt(Instant.now());
+        u.setVersionTerminos(d.versionTerminos() != null && !d.versionTerminos().isBlank() ? d.versionTerminos().trim() : "1.0");
+        u.setVersionPolitica(d.versionPolitica() != null && !d.versionPolitica().isBlank() ? d.versionPolitica().trim() : "1.0");
         u.setRol(roles.findByNombre(d.rol()).orElseThrow(() -> ApiException.invalido("Rol inexistente")));
         u = usuarios.save(u);
         PerfilFila f = d.perfil();
@@ -191,5 +203,22 @@ public class UsuariosBdController {
     public List<CiudadFila> ciudades(@RequestParam(required = false) Integer regionId) {
         List<Ciudad> l = regionId == null ? ciudades.findAllByOrderByNombre() : ciudades.findByRegionIdOrderByNombre(regionId);
         return l.stream().map(c -> new CiudadFila(c.getId(), c.getNombre(), c.getRegionId())).toList();
+    }
+
+    // ---------- configuración legal ----------
+    @GetMapping("/config/legal")
+    public ConfigLegalFila legalGet() {
+        ConfigLegal c = configLegal.findById(1).orElseGet(ConfigLegal::new);
+        return new ConfigLegalFila(c.getUrlTerminos(), c.getUrlPolitica(), c.getVersionTerminos(), c.getVersionPolitica());
+    }
+
+    @PutMapping("/config/legal") @Transactional
+    public ConfigLegalFila legalPut(@RequestBody ConfigLegalFila b) {
+        ConfigLegal c = configLegal.findById(1).orElseGet(ConfigLegal::new);
+        c.setUrlTerminos(b.urlTerminos()); c.setUrlPolitica(b.urlPolitica());
+        if (b.versionTerminos() != null && !b.versionTerminos().isBlank()) c.setVersionTerminos(b.versionTerminos());
+        if (b.versionPolitica() != null && !b.versionPolitica().isBlank()) c.setVersionPolitica(b.versionPolitica());
+        configLegal.save(c);
+        return new ConfigLegalFila(c.getUrlTerminos(), c.getUrlPolitica(), c.getVersionTerminos(), c.getVersionPolitica());
     }
 }

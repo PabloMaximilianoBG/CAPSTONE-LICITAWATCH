@@ -26,6 +26,10 @@ export interface Usuario {
   createdAt: string
   ultimoLogin?: string
   foto?: string | null   // data URL JPEG 256x256; sin foto se muestran las iniciales
+  aceptaTerminos?: boolean
+  terminosAceptadosAt?: string
+  versionTerminos?: string
+  versionPolitica?: string
 }
 
 export interface Perfil {
@@ -67,6 +71,9 @@ export interface RegistroLicitador {
   sitioWeb?: string
   giro?: string
   siiValidado: boolean
+  aceptaTerminos: boolean
+  versionTerminos?: string
+  versionPolitica?: string
 }
 export interface RegistroPyme extends RegistroLicitador {
   tamanoEmpresaId: number
@@ -374,6 +381,16 @@ export interface RegistroOk {
 /** Código HTTP con que el login rechaza una cuenta que aún no verifica su correo. */
 export const ERROR_SIN_VERIFICAR = 428
 
+export const VERSION_TERMINOS = '1.0'
+export const VERSION_POLITICA = '1.0'
+
+export interface ConfigLegal {
+  urlTerminos: string | null
+  urlPolitica: string | null
+  versionTerminos?: string
+  versionPolitica?: string
+}
+
 export interface Api {
   // Autenticación
   login(email: string, password: string): Promise<Sesion>
@@ -395,6 +412,10 @@ export interface Api {
   regiones(): Promise<Catalogo[]>
   ciudades(regionId?: number): Promise<Ciudad[]>
   tamanos(): Promise<Catalogo[]>
+
+  // Configuración legal
+  configLegal(): Promise<ConfigLegal>
+  guardarConfigLegal(d: ConfigLegal): Promise<ConfigLegal>
 
   // Perfil
   actualizarPerfil(d: Partial<Perfil>): Promise<Perfil>
