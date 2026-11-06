@@ -1,7 +1,9 @@
 package cl.licitawatch.usuarios.bff;
 
+import cl.licitawatch.common.Auth;
 import cl.licitawatch.common.InternalClient;
 import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,4 +24,16 @@ public class SiiCatalogoController {
     @GetMapping("/api/catalogos/tamanos") public JsonNode tamanos() { return get("/bs/catalogos/tamanos"); }
     @GetMapping("/api/catalogos/ciudades")
     public JsonNode ciudades(@RequestParam(required = false) Integer regionId) { return get("/bs/catalogos/ciudades" + (regionId == null ? "" : "?regionId=" + regionId)); }
+
+    // ---------- configuración legal (GET público; PUT solo ADMIN) ----------
+    @GetMapping("/api/configuracion/legal")
+    public JsonNode configLegalGet() { return get("/bs/config/legal"); }
+
+    public record ConfigLegalBody(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {}
+    @PutMapping("/api/configuracion/legal")
+    public JsonNode configLegalPut(HttpServletRequest r, @RequestBody ConfigLegalBody b) {
+        Auth.exigir(r, "ADMIN");
+        return bs.put(urlBs + "/bs/config/legal", b, JsonNode.class);
+    }
 }
+

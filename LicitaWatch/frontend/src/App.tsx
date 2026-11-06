@@ -9,6 +9,7 @@ import { PublicPage } from './components/layout/PublicLayout'
 import { Home } from './pages/public/Home'
 import { RegisterChoice, RegisterForm } from './pages/public/Register'
 import { Login, Recover, Reset, Bandeja, RevisaCorreo, Verificar } from './pages/public/Auth'
+import { TerminosCondiciones, PoliticaPrivacidad } from './pages/public/Legal'
 import { LicitadorDashboard } from './pages/licitador/Dashboard'
 import { MyTenders, TenderForm } from './pages/licitador/Tenders'
 import { PymeDashboard } from './pages/pyme/Dashboard'
@@ -40,6 +41,8 @@ const publicas: RouteDef[] = [
   { path: '/verifica-tu-correo', render: () => <RevisaCorreo /> },
   { path: '/verificar', render: () => <Verificar /> },
   { path: '/bandeja', render: () => <Bandeja /> },
+  { path: '/terminos-y-condiciones', render: () => <TerminosCondiciones /> },
+  { path: '/politica-de-privacidad', render: () => <PoliticaPrivacidad /> },
 ]
 
 function Privada() {

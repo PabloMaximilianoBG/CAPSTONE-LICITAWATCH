@@ -36,6 +36,7 @@ export interface DB {
   correos: CorreoDB[]
   tokens: TokenDB[]
   sesiones: Record<string, number>
+  configLegal: { urlTerminos: string | null; urlPolitica: string | null; versionTerminos?: string; versionPolitica?: string }
 }
 
 export const PLANES: Plan[] = [
@@ -104,6 +105,7 @@ function seed(): DB {
   const db: DB = {
     version: 5, seq: {}, usuarios: [], perfiles: [], licitaciones: [], postulaciones: [], conversaciones: [],
     mensajes: [], notificaciones: [], suscripciones: [], ventas: [], correos: [], tokens: [], sesiones: {},
+    configLegal: { urlTerminos: '/terminos-y-condiciones', urlPolitica: '/politica-de-privacidad', versionTerminos: '1.0', versionPolitica: '1.0' },
   }
 
   const addUser = (email: string, rol: Usuario['rol'], haceDias: number, activo = true): UsuarioDB => {

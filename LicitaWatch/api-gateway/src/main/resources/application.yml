@@ -13,7 +13,7 @@ spring:
         # Las rutas /internal/** NO se exponen: solo se comunican los servicios entre sí.
         - id: usuarios
           uri: ${URL_USUARIOS:http://localhost:8081}
-          predicates: [ "Path=/api/auth/**,/api/usuarios/**,/api/sii/**,/api/catalogos/**,/api/admin/usuarios/**,/api/admin/estadisticas" ]
+          predicates: [ "Path=/api/auth/**,/api/usuarios/**,/api/sii/**,/api/catalogos/**,/api/configuracion/**,/api/admin/usuarios/**,/api/admin/estadisticas" ]
         - id: licitaciones
           uri: ${URL_LICITACIONES:http://localhost:8082}
           predicates: [ "Path=/api/licitaciones/**,/api/postulaciones/**,/api/admin/licitaciones" ]

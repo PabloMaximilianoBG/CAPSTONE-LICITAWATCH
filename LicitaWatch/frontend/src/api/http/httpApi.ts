@@ -131,4 +131,7 @@ export const httpApi: Api = {
   ventasAdmin: () => get('/api/admin/ventas'),
   actualizarPrecioPlan: (planId, precio, password, motivo) => req('PUT', `/api/ventas/planes/${planId}/precio`, { precio, password, motivo }),
   historialPreciosPlan: () => get('/api/ventas/planes/historial'),
+
+  configLegal: () => get('/api/configuracion/legal'),
+  guardarConfigLegal: (d) => req('PUT', '/api/configuracion/legal', d),
 }

@@ -18,7 +18,8 @@ import static cl.licitawatch.common.InternalClient.q;
 /** Acceso a la capa BD de Usuarios (ms-usuarios-bd) por REST. Las filas llegan tal como están en las tablas del ER. */
 @Component
 public class UsuariosBd {
-    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin) {}
+    public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin,
+                              boolean aceptaTerminos, Instant terminosAceptadosAt, String versionTerminos, String versionPolitica) {}
     public record PerfilFila(Long usuarioId, String tipo, String razonSocial, String rut, String rutPersona, String nombreContacto, String emailContacto, String telefono,
                              Integer rubroId, Integer ciudadId, Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, Instant updatedAt, String nombre, String area) {
         boolean esEmpresa() { return !"ADMIN".equals(tipo); }
@@ -39,9 +40,11 @@ public class UsuariosBd {
         catch (ApiException e) { if (e.getStatus() == HttpStatus.NOT_FOUND) return Optional.empty(); throw e; }
     }
     public boolean emailExiste(String email) { return bd.get(url + "/bd/usuarios/existe?email=" + q(email.trim()), JsonNode.class).path("existe").asBoolean(); }
-    public UsuarioFila crear(String email, String passwordHash, String rol, boolean verificado, PerfilFila perfil) {
+    public UsuarioFila crear(String email, String passwordHash, String rol, boolean verificado, boolean aceptaTerminos, String versionTerminos, String versionPolitica, PerfilFila perfil) {
         Map<String, Object> b = new HashMap<>();
-        b.put("email", email); b.put("password", passwordHash); b.put("rol", rol); b.put("emailVerificado", verificado); b.put("perfil", perfil);
+        b.put("email", email); b.put("password", passwordHash); b.put("rol", rol); b.put("emailVerificado", verificado);
+        b.put("aceptaTerminos", aceptaTerminos); b.put("versionTerminos", versionTerminos); b.put("versionPolitica", versionPolitica);
+        b.put("perfil", perfil);
         return bd.post(url + "/bd/usuarios", b, UsuarioFila.class);
     }
     /** Cambia solo los campos indicados (los null no se tocan). */
@@ -81,4 +84,12 @@ public class UsuariosBd {
     public boolean rubroExiste(Integer id) { return id != null && rubros().stream().anyMatch(c -> c.id().equals(id)); }
     public boolean ciudadExiste(Integer id) { return id != null && ciudades(null).stream().anyMatch(c -> c.id().equals(id)); }
     public boolean tamanoExiste(Integer id) { return id != null && tamanos().stream().anyMatch(c -> c.id().equals(id)); }
+
+    // ---------- configuración legal ----------
+    public record ConfigLegalFila(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {}
+    public ConfigLegalFila configLegal() { return bd.get(url + "/bd/config/legal", ConfigLegalFila.class); }
+    public ConfigLegalFila guardarConfigLegal(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {
+        return bd.put(url + "/bd/config/legal", new ConfigLegalFila(urlTerminos, urlPolitica, versionTerminos, versionPolitica), ConfigLegalFila.class);
+    }
 }
+

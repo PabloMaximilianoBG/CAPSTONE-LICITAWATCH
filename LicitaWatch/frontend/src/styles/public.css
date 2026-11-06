@@ -12,7 +12,10 @@
 .pfoot-brand p { color: var(--muted); max-width: 340px; margin-top: 10px; font-size: 14px; }
 .pfoot-chips { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
 .pfoot-chips span { padding: 6px 12px; border-radius: 99px; background: var(--surface-2); font-size: 13px; color: var(--muted); }
-.pfoot-bottom { text-align: center; padding: 16px; font-size: 13px; color: var(--subtle); border-top: 1px solid var(--border); }
+.pfoot-bottom { display: flex; align-items: center; justify-content: center; gap: 8px 18px; flex-wrap: wrap; text-align: center; padding: 16px; font-size: 13px; color: var(--subtle); border-top: 1px solid var(--border); }
+.pfoot-legal-links { display: inline-flex; align-items: center; gap: 8px; }
+.pfoot-legal-links a { color: var(--blue); font-weight: 600; text-decoration: none; }
+.pfoot-legal-links a:hover { text-decoration: underline; }
 
 /* ---- Hero ---- */
 .hero { position: relative; padding: 24px 0 60px; overflow: hidden; }
@@ -221,3 +224,20 @@
 .alert-ok { background: var(--green-soft); color: #15803d; } .alert-warn { align-items: flex-start; background: var(--amber-soft); color: #92400e; } .alert-warn svg { flex: none; margin-top: 2px; }
 .alert-body { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; } .alert-warn .link-btn { color: #92400e; text-decoration: underline; }
 .sent-ic.err { background: var(--red-soft); color: var(--red); } .sent .sent-nota { font-size: 13.5px; color: var(--subtle); margin-top: -4px; }
+
+/* ---- Enlaces y páginas legales (Términos y Condiciones / Política de Privacidad) ---- */
+.legal-link { color: var(--blue); font-weight: 600; text-decoration: none; }
+.legal-link:hover { text-decoration: underline; }
+.legal-sec { padding: 48px 0 80px; }
+.legal-head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.legal-badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.legal-head h1 { font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -.03em; }
+.legal-tabs { display: inline-flex; gap: 6px; padding: 4px; background: var(--surface-2); border-radius: 13px; align-self: flex-start; margin-top: 4px; flex-wrap: wrap; }
+.legal-aviso { margin-bottom: 18px; }
+.legal-body { display: flex; flex-direction: column; gap: 22px; }
+.legal-block { display: flex; flex-direction: column; gap: 10px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.legal-block:last-child { padding-bottom: 0; border-bottom: 0; }
+.legal-block h3 { font-size: 17.5px; color: var(--text); }
+.legal-block ul { display: flex; flex-direction: column; gap: 9px; }
+.legal-block li { display: flex; gap: 10px; align-items: flex-start; color: #2c3858; font-size: 14.5px; line-height: 1.6; }
+.legal-block li svg { flex: none; margin-top: 4px; color: var(--blue); }

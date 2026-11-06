@@ -72,8 +72,20 @@ export function Footer() {
           <a href="/#planes">Planes</a>
           <a href="/#asistente">LicitAsist (IA)</a>
         </div>
+        <div>
+          <h5>Legal</h5>
+          <Link to="/terminos-y-condiciones">Términos y Condiciones</Link>
+          <Link to="/politica-de-privacidad">Política de Privacidad</Link>
+        </div>
       </div>
-      <div className="pfoot-bottom">© 2026 LicitaWatch · Proyecto de título · Todos los derechos reservados</div>
+      <div className="pfoot-bottom">
+        <span>© 2026 LicitaWatch · Proyecto de título · Todos los derechos reservados</span>
+        <span className="pfoot-legal-links">
+          <Link to="/terminos-y-condiciones">Términos y Condiciones</Link>
+          <span>·</span>
+          <Link to="/politica-de-privacidad">Política de Privacidad</Link>
+        </span>
+      </div>
     </footer>
   )
 }
