@@ -21,7 +21,8 @@ public class LicitacionController {
     /** contenido = data URL del archivo (solo al publicar o agregar). */
     public record DocumentoDto(@NotBlank @Size(max = 255) String nombre, String tipo, int tamanoKb, String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
-                                  Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
+                                  Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, @NotNull @Min(1) @Max(120) Integer duracionMeses,
+                                  String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
     public record Postular(String mensaje) {}
     public record Decision(@NotBlank String estado) {}
     public record Archivar(boolean archivada) {}

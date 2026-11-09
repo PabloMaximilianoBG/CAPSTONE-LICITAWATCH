@@ -8,7 +8,7 @@ import { TenderPanorama } from '../licitador/TenderPanorama'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
-import { diasHasta, fechaCorta, hace, rangoPresupuesto, clp, tipoArchivo } from '../../lib/format'
+import { diasHasta, duracionTexto, fechaCorta, hace, rangoPresupuesto, clp, tipoArchivo } from '../../lib/format'
 
 export function TenderDetail({ id }: { id: number }) {
   const { sesion } = useAuth()
@@ -267,6 +267,7 @@ export function TenderDetail({ id }: { id: number }) {
             <div><Icon name="dollar" size={18} /><span>Presupuesto</span><b>{rangoPresupuesto(l.presupuestoMin, l.presupuestoMax)}</b></div>
             <div><Icon name="pin" size={18} /><span>Región</span><b>{cat.region(l.regionId)}</b></div>
             <div><Icon name="calendar" size={18} /><span>Cierre</span><b>{fechaCorta(l.fechaCierre)}</b></div>
+            {l.duracionMeses && <div><Icon name="briefcase" size={18} /><span>Duración del proyecto</span><b>{duracionTexto(l.duracionMeses)}</b></div>}
             <div><Icon name="users" size={18} /><span>Postulantes</span><b>{l.postulantes}{l.maxPostulantes ? ` / ${l.maxPostulantes}` : ''}</b></div>
           </div>
         </div>

@@ -28,7 +28,7 @@ public class LicitacionService {
     private static final String[] MESES = {"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"};
     // Filas tal como las entrega la capa BD.
     record Lic(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
-               Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
+               Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
                Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales) {}
     record DocFila(Long id, String nombre, String tipo, int tamanoKb) {}
     record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
@@ -86,7 +86,7 @@ public class LicitacionService {
         if (l.archivoNombre() != null) docs.add(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), l.archivoKb() == null ? 0 : l.archivoKb(), null, null));
         if (l.adicionales() != null) for (DocFila d : l.adicionales()) docs.add(new DocumentoDto(d.nombre(), d.tipo(), d.tamanoKb(), null, d.id()));
         return new LicitacionDto(l.id(), l.licitadorId(), c.nombre(l.licitadorId()), l.titulo(), l.descripcion(), l.rubroId(), l.regionId(), l.presupuestoMin(),
-                l.presupuestoMax(), l.maxPostulantes(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId());
+                l.presupuestoMax(), l.maxPostulantes(), l.duracionMeses(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId());
     }
     private List<LicitacionDto> dtos(Collection<Lic> ls) { Ctx c = new Ctx(); return ls.stream().map(l -> dto(l, c)).toList(); }
 
@@ -128,7 +128,7 @@ public class LicitacionService {
         Map<String, Object> nueva = new HashMap<>();
         nueva.put("licitadorId", licitadorId); nueva.put("titulo", d.titulo().trim()); nueva.put("descripcion", d.descripcion().trim());
         nueva.put("rubroId", d.rubroId()); nueva.put("regionId", d.regionId()); nueva.put("presupuestoMin", d.presupuestoMin()); nueva.put("presupuestoMax", d.presupuestoMax());
-        nueva.put("maxPostulantes", d.maxPostulantes()); nueva.put("imagenUrl", d.imagenUrl()); nueva.put("fechaCierre", cierre);
+        nueva.put("maxPostulantes", d.maxPostulantes()); nueva.put("duracionMeses", d.duracionMeses()); nueva.put("imagenUrl", d.imagenUrl()); nueva.put("fechaCierre", cierre);
         nueva.put("archivoNombre", doc == null ? null : doc.nombre()); nueva.put("tipoArchivo", doc == null ? null : doc.tipo());
         nueva.put("archivoContenido", doc == null ? null : doc.contenido()); nueva.put("adicionales", adicionales);
         Lic l = interno.post(urlBd + "/bd/licitaciones", nueva, Lic.class);

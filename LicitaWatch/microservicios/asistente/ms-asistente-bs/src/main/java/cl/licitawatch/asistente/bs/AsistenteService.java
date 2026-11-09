@@ -64,6 +64,7 @@ public class AsistenteService {
                .append(" | presupuesto $").append(l.path("presupuestoMin").asText("?")).append(" a $").append(l.path("presupuestoMax").asText("?"))
                .append(" | cierra ").append(l.path("fechaCierre").asText()).append(" | postulantes: ").append(l.path("postulantes").asText())
                .append(l.path("maxPostulantes").isNull() ? "" : " de " + l.path("maxPostulantes").asText())
+               .append(l.path("duracionMeses").isNull() ? "" : " | duración del contrato: " + l.path("duracionMeses").asText() + " meses")
                .append(" | ").append(corto(l.path("descripcion").asText(), 300)).append("\n");
 
         String sistema = """

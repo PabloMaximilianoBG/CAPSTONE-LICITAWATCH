@@ -8,7 +8,7 @@ import { REGIONES, rubroPorNombre, ciudadPorNombre } from './catalogs'
 export interface UsuarioDB extends Usuario { password: string }
 export interface LicitacionDB {
   id: number; licitadorId: number; titulo: string; descripcion: string; rubroId: number; regionId: number
-  presupuestoMin?: number; presupuestoMax?: number; maxPostulantes?: number; imagenUrl?: string
+  presupuestoMin?: number; presupuestoMax?: number; maxPostulantes?: number; duracionMeses?: number; imagenUrl?: string
   documentos: DocumentoLicitacion[]; fechaCierre: string; estado: EstadoLicitacion; createdAt: string; pymeAdjudicadaId?: number
 }
 export interface PostulacionDB {
@@ -239,7 +239,7 @@ function seed(): DB {
     const cierre = estado === 'Cerrada' ? now - (3 + i) * DAY : estado === 'Adjudicada' ? now - (2 + i % 3) * DAY : now + (4 + Math.floor(r() * 24)) * DAY
     db.licitaciones.push({
       id: nextId(db, 'licitacion'), licitadorId: licIds[i % licIds.length], titulo: p[0], descripcion: p[3],
-      rubroId: rubroPorNombre(p[1]), regionId: regionPorNombre(p[2]), presupuestoMin: p[4], presupuestoMax: p[5], maxPostulantes: p[6] + 4,
+      rubroId: rubroPorNombre(p[1]), regionId: regionPorNombre(p[2]), presupuestoMin: p[4], presupuestoMax: p[5], maxPostulantes: p[6] + 4, duracionMeses: [3, 6, 12, 18, 24][i % 5],
       documentos: i % 3 === 0 ? [{ nombre: 'Bases_tecnicas.pdf', tipo: 'PDF', tamanoKb: 420 + i * 13 }, { id: nextId(db, 'documento'), nombre: 'Anexo_economico.xlsx', tipo: 'XLSX', tamanoKb: 96 }] : i % 3 === 1 ? [{ nombre: 'Bases_administrativas.pdf', tipo: 'PDF', tamanoKb: 310 + i * 9 }] : [],
       fechaCierre: iso(cierre), estado, createdAt: iso(now - (6 + i * 2) * DAY),
     })

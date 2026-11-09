@@ -13,9 +13,10 @@ public final class Dto {
     public record DocumentoDto(@NotBlank String nombre, String tipo, int tamanoKb, String contenido, Long id) {}
     public record ArchivoDto(String nombre, String tipo, String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
-                                  Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
+                                  Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, @NotNull @Min(1) @Max(120) Integer duracionMeses, String imagenUrl,
+                                  List<DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
     public record LicitacionDto(Long id, Long licitadorId, String licitadorNombre, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin,
-                                Long presupuestoMax, Integer maxPostulantes, String imagenUrl, List<DocumentoDto> documentos, Instant fechaCierre, String estado,
+                                Long presupuestoMax, Integer maxPostulantes, Integer duracionMeses, String imagenUrl, List<DocumentoDto> documentos, Instant fechaCierre, String estado,
                                 Instant createdAt, long postulantes, Long pymeAdjudicadaId) {}
     public record Postular(String mensaje) {}
     public record Decision(@NotBlank String estado) {}

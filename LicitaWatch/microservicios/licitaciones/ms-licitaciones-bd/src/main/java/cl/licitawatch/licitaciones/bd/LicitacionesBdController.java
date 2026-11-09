@@ -20,7 +20,7 @@ import java.util.*;
 public class LicitacionesBdController {
     /** Fila de licitacion con el nombre de sus catálogos, más el n.º de postulaciones y la Pyme con la postulación aprobada (si hay). */
     public record LicFila(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
-                          Integer maxPostulantes, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
+                          Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
                           Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales) {}
     /** Documento adicional (tabla documento_licitacion) sin su contenido. */
     public record DocFila(Long id, String nombre, String tipo, int tamanoKb) {}
@@ -28,7 +28,7 @@ public class LicitacionesBdController {
     public record ArchivoFila(String nombre, String tipo, String contenido) {}
     public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
     public record NuevaLic(Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
-                           Integer maxPostulantes, String imagenUrl, String archivoNombre, String tipoArchivo, String archivoContenido, LocalDate fechaCierre,
+                           Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoNombre, String tipoArchivo, String archivoContenido, LocalDate fechaCierre,
                            List<NuevoDoc> adicionales) {}
     /** Documento adicional nuevo: contenido = data URL (base64). */
     public record NuevoDoc(String nombre, String tipo, String contenido) {}
@@ -62,7 +62,7 @@ public class LicitacionesBdController {
         String url = l.getArchivoUrl(); boolean conContenido = url != null && url.startsWith("data:");
         Integer kb = conContenido ? Math.max(1, (int) ((url.length() - url.indexOf(',') - 1) * 3L / 4 / 1024)) : null;
         return new LicFila(l.getId(), l.getLicitadorId(), l.getTitulo(), l.getDescripcion(), l.getRubroId(), l.getRegionId(), aLong(l.getPresupuestoMin()), aLong(l.getPresupuestoMax()),
-                l.getMaxPostulantes(), l.getImagenUrl(), conContenido ? null : url, l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
+                l.getMaxPostulantes(), l.getDuracionMeses(), l.getImagenUrl(), conContenido ? null : url, l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
                 l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada, kb, adicionales);
     }
     private static PostFila fila(Postulacion p) { return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt(), p.isArchivada()); }
@@ -108,7 +108,7 @@ public class LicitacionesBdController {
     public LicFila crear(@RequestBody NuevaLic d) {
         Licitacion l = new Licitacion();
         l.setLicitadorId(d.licitadorId()); l.setTitulo(d.titulo()); l.setDescripcion(d.descripcion()); l.setRubroId(d.rubroId()); l.setRegionId(d.regionId());
-        l.setPresupuestoMin(aDec(d.presupuestoMin())); l.setPresupuestoMax(aDec(d.presupuestoMax())); l.setMaxPostulantes(d.maxPostulantes()); l.setImagenUrl(d.imagenUrl());
+        l.setPresupuestoMin(aDec(d.presupuestoMin())); l.setPresupuestoMax(aDec(d.presupuestoMax())); l.setMaxPostulantes(d.maxPostulantes()); l.setDuracionMeses(d.duracionMeses()); l.setImagenUrl(d.imagenUrl());
         l.setFechaCierre(d.fechaCierre()); l.setEstado(el("Abierta"));
         if (d.archivoNombre() != null) {
             // archivo_url guarda el archivo como data URL (base64): el ER no tiene otra columna para el contenido.

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS licitacion (
   presupuesto_min       NUMERIC(14,2),
   presupuesto_max       NUMERIC(14,2),
   max_postulantes       INTEGER,
+  duracion_meses        INTEGER,                          -- duración del contrato que gana la Pyme adjudicada (1 a 120 meses)
   imagen_url            TEXT,
   archivo_url           TEXT,                             -- documento principal opcional (los demás van en documento_licitacion)
   archivo_nombre        VARCHAR(255),
@@ -35,7 +36,8 @@ CREATE TABLE IF NOT EXISTS licitacion (
   fecha_cierre          DATE    NOT NULL,
   estado_licitacion_id  INTEGER NOT NULL REFERENCES estado_licitacion(id),
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT ck_presupuesto CHECK (presupuesto_min IS NULL OR presupuesto_max IS NULL OR presupuesto_min <= presupuesto_max)
+  CONSTRAINT ck_presupuesto CHECK (presupuesto_min IS NULL OR presupuesto_max IS NULL OR presupuesto_min <= presupuesto_max),
+  CONSTRAINT ck_duracion   CHECK (duracion_meses IS NULL OR duracion_meses BETWEEN 1 AND 120)
 );
 CREATE INDEX IF NOT EXISTS ix_lic_licitador ON licitacion(licitador_id);
 CREATE INDEX IF NOT EXISTS ix_lic_estado    ON licitacion(estado_licitacion_id);
