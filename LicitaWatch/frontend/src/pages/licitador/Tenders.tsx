@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
-import { MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, PLAZO_MINIMO_DIAS, type AlcancePymes, type DocumentoLicitacion, type EstadoLicitacion, type Licitacion, type ReferenciaPresupuesto } from '../../api/types'
+import { DURACION_MAX_MESES, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, PLAZO_MINIMO_DIAS, type AlcancePymes, type DocumentoLicitacion, type EstadoLicitacion, type Licitacion, type ReferenciaPresupuesto } from '../../api/types'
 import { Button, Card, CardHeader, Cargando, EmptyState, Field, Input, PageHeader, Select, Tabs, Textarea, useAsync, useToast } from '../../components/ui/ui'
 import { TenderCard, VolverLink } from '../../components/app/shared'
 import { navigate } from '../../lib/router'
@@ -48,6 +48,7 @@ export function TenderForm() {
   const [max, setMax] = useState('')
   const [maxPost, setMaxPost] = useState('')
   const [cierre, setCierre] = useState('')
+  const [duracion, setDuracion] = useState('')   // meses del contrato que gana la Pyme adjudicada
   const [imagen, setImagen] = useState<string | undefined>()
   const [docs, setDocs] = useState<DocumentoLicitacion[]>([])
   const [errores, setErrores] = useState<Record<string, string>>({})
@@ -90,11 +91,13 @@ export function TenderForm() {
   const minCierre = cierreMinimo()
   const errCierre = cierre && cierre < minCierre ? `Da al menos ${PLAZO_MINIMO_DIAS} días para postular (desde el ${fechaCorta(minCierre + 'T12:00:00')})` : undefined
   const errMax = min && max && Number(min) > Number(max) ? 'El máximo debe ser mayor o igual al mínimo' : undefined
+  const meses = Number(duracion)
+  const errDuracion = duracion && (!Number.isInteger(meses) || meses < 1 || meses > DURACION_MAX_MESES) ? `Indica de 1 a ${DURACION_MAX_MESES} meses (número entero)` : undefined
   const fechaCierreIso = cierre ? new Date(cierre + 'T23:59:59').toISOString() : undefined
   const vista: Licitacion = {
     id: 0, licitadorId: sesion?.usuario.id ?? 0, licitadorNombre: sesion?.perfil.razonSocial || 'Tu empresa', titulo: titulo.trim() || 'Título de tu licitación',
     descripcion, rubroId, regionId, presupuestoMin: min ? Number(min) : undefined, presupuestoMax: max ? Number(max) : undefined, maxPostulantes: maxPost ? Number(maxPost) : undefined,
-    imagenUrl: imagen, documentos: docs, fechaCierre: fechaCierreIso ?? new Date(minCierre + 'T23:59:59').toISOString(), estado: 'Abierta', createdAt: new Date().toISOString(), postulantes: 0,
+    duracionMeses: duracion && !errDuracion ? meses : undefined, imagenUrl: imagen, documentos: docs, fechaCierre: fechaCierreIso ?? new Date(minCierre + 'T23:59:59').toISOString(), estado: 'Abierta', createdAt: new Date().toISOString(), postulantes: 0,
   }
 
   const subirImagen = (f?: File) => {
@@ -133,13 +136,15 @@ export function TenderForm() {
     if (!cierre) e.cierre = 'Define la fecha de cierre'
     else if (errCierre) e.cierre = errCierre
     if (errMax) e.max = errMax
+    if (!duracion) e.duracion = 'Indica cuántos meses dura el proyecto'
+    else if (errDuracion) e.duracion = errDuracion
     setErrores(e)
     if (Object.keys(e).length) { toast.error('Revisa los campos marcados.'); return }
     setEnviando(true)
     try {
       const l = await api.crearLicitacion({
         titulo: titulo.trim(), descripcion: descripcion.trim(), rubroId, regionId, presupuestoMin: min ? Number(min) : undefined, presupuestoMax: max ? Number(max) : undefined,
-        maxPostulantes: maxPost ? Number(maxPost) : undefined, imagenUrl: imagen, documentos: docs, fechaCierre: new Date(cierre + 'T23:59:59').toISOString(),
+        maxPostulantes: maxPost ? Number(maxPost) : undefined, duracionMeses: meses, imagenUrl: imagen, documentos: docs, fechaCierre: new Date(cierre + 'T23:59:59').toISOString(),
       })
       toast.ok('¡Licitación publicada! Ya es visible para las Pymes.')
       navigate(`/app/licitacion/${l.id}`)
@@ -171,6 +176,7 @@ export function TenderForm() {
           <Field label="Presupuesto máximo (CLP)" error={errores.max ?? errMax}><Input type="number" min={0} value={max} onChange={(e) => setMax(e.target.value)} placeholder="3000000" /></Field>
           {referencia && <div className="span-2"><SugerenciaPresupuesto referencia={referencia} rubro={rubroNombre} min={min} max={max} usar={(d, h) => { setMin(String(d)); setMax(String(h)) }} /></div>}
           <Field label="Fecha de cierre" required error={errores.cierre ?? errCierre} hint={`Mínimo ${PLAZO_MINIMO_DIAS} días desde hoy.`}><Input icon="calendar" type="date" min={minCierre} value={cierre} onChange={(e) => setCierre(e.target.value)} /></Field>
+          <Field label="Duración del proyecto (meses)" required error={errores.duracion ?? errDuracion} hint="Tiempo de contrato que gana la Pyme adjudicada. Ej: 12."><Input icon="briefcase" type="number" min={1} max={DURACION_MAX_MESES} step={1} value={duracion} onChange={(e) => setDuracion(e.target.value)} placeholder="12" /></Field>
           <Field label="Máximo de postulantes" hint="Opcional. Déjalo vacío para no limitar."><Input type="number" min={1} value={maxPost} onChange={(e) => setMaxPost(e.target.value)} placeholder="10" /></Field>
         </div>
       </Card>

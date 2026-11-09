@@ -12,6 +12,8 @@ export const compacto = (n: number): string => {
   return `$${n}`
 }
 
+export const duracionTexto = (meses: number): string => `${meses} mes${meses === 1 ? '' : 'es'}`
+
 export const rangoPresupuesto = (min?: number, max?: number): string => {
   if (min == null && max == null) return 'A convenir'
   if (min != null && max != null) return `${compacto(min)} – ${compacto(max)}`

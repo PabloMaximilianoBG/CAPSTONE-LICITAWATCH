@@ -4,7 +4,7 @@ import { Icon, type IconName } from '../../lib/icons'
 import { Link } from '../../lib/router'
 import { Badge, tonoEstado } from '../ui/ui'
 import { useCatalogos } from '../../context/AuthContext'
-import { diasHasta, hace, rangoPresupuesto } from '../../lib/format'
+import { diasHasta, duracionTexto, hace, rangoPresupuesto } from '../../lib/format'
 import { NotifItem, iconoNotificacion, useNotificaciones } from '../layout/AppShell'
 import { useAuth } from '../../context/AuthContext'
 
@@ -57,6 +57,7 @@ export function TenderCard({ l, acciones }: { l: Licitacion; acciones?: ReactNod
         <div className="tcard-meta">
           <span><Icon name="pin" size={14} />{cat.region(l.regionId)}</span>
           <span><Icon name="dollar" size={14} />{rangoPresupuesto(l.presupuestoMin, l.presupuestoMax)}</span>
+          {l.duracionMeses && <span><Icon name="briefcase" size={14} />{duracionTexto(l.duracionMeses)}</span>}
         </div>
         <div className="tcard-foot">
           <span className={urgente ? 'urg' : ''}><Icon name="clock" size={14} />{l.estado !== 'Abierta' ? 'Finalizada' : dias < 0 ? 'Vencida' : dias === 0 ? 'Cierra hoy' : `Cierra en ${dias} día${dias === 1 ? '' : 's'}`}</span>

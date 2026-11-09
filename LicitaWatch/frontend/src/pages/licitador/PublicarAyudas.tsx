@@ -2,7 +2,7 @@ import type { AlcancePymes, Licitacion, ReferenciaPresupuesto } from '../../api/
 import { Card, Progress } from '../../components/ui/ui'
 import { TenderCard } from '../../components/app/shared'
 import { Icon } from '../../lib/icons'
-import { clp, fechaCorta } from '../../lib/format'
+import { clp, duracionTexto, fechaCorta } from '../../lib/format'
 
 /* Ayudas del formulario «Publicar licitación»: plantillas por rubro, indicador de calidad, cronograma y panel lateral. */
 
@@ -35,7 +35,7 @@ export function plantillaPara(rubro: string): string {
     '',
     'PLAZOS',
     '- Inicio estimado: [fecha o semana]',
-    '- Duración o plazo de entrega: [plazo]',
+    '- Plazo de entrega o hitos: [plazo]',
     '',
     'CONDICIONES DE PAGO',
     '- [Ej: 30 días desde la recepción conforme de la factura]',
@@ -77,7 +77,7 @@ function Calidad({ datos }: { datos: DatosCalidad }) {
   )
 }
 
-function Cronograma({ cierre }: { cierre?: string }) {
+function Cronograma({ cierre, duracionMeses }: { cierre?: string; duracionMeses?: number }) {
   const hoy = new Date().toISOString()
   const dias = cierre ? Math.round((new Date(cierre).getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000) : undefined
   const pasos = [
@@ -85,6 +85,7 @@ function Cronograma({ cierre }: { cierre?: string }) {
     { t: 'Recepción de postulaciones', d: dias != null ? `${dias} día${dias === 1 ? '' : 's'} para que las Pymes postulen` : 'Hasta la fecha de cierre', icon: 'users' as const },
     { t: 'Cierre', d: cierre ? fechaCorta(cierre) : 'Define la fecha de cierre', icon: 'lock' as const },
     { t: 'Adjudicación', d: 'Apruebas la mejor postulación y se abre el chat con la Pyme', icon: 'award' as const },
+    { t: 'Ejecución del proyecto', d: duracionMeses ? `${duracionTexto(duracionMeses)} de contrato con la Pyme adjudicada` : 'Define la duración del proyecto', icon: 'briefcase' as const },
   ]
   return (
     <Card className="pub-box">
@@ -134,7 +135,7 @@ export function PanelPublicar({ vista, datos, alcance, rubro, region, cierre }: 
       </div>
       <Calidad datos={datos} />
       <Alcance alcance={alcance} rubro={rubro} region={region} />
-      <Cronograma cierre={cierre} />
+      <Cronograma cierre={cierre} duracionMeses={vista.duracionMeses} />
     </aside>
   )
 }

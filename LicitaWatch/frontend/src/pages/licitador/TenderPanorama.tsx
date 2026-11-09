@@ -5,7 +5,7 @@ import { Avatar, Badge, Card, CardHeader, EmptyState, Progress, tonoEstado, useA
 import { ChileMap } from '../../components/app/ChileMap'
 import { useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
-import { clp, diasHasta, fechaCorta } from '../../lib/format'
+import { clp, diasHasta, duracionTexto, fechaCorta } from '../../lib/format'
 
 /* Vista panorámica del detalle de una licitación para su Licitador dueño (los demás roles ven el detalle de siempre). */
 
@@ -86,7 +86,7 @@ export function TenderPanorama({ l, postulaciones, documentos, accionDocumentos,
           <Dato label="Documentos" valor={l.documentos.length === 0 ? 'Sin archivos' : `${l.documentos.length} archivo${l.documentos.length === 1 ? '' : 's'}`} />
           <Dato label="Rubro" valor={cat.rubro(l.rubroId)} />
           <Dato label="Región" valor={cat.region(l.regionId)} />
-          <Dato label="Estado" valor={l.estado} />
+          <Dato label="Duración del proyecto" valor={l.duracionMeses ? duracionTexto(l.duracionMeses) : 'Sin definir'} />
           <Dato label="Publicada el" valor={fechaCorta(l.createdAt)} />
         </div>
         <div className={`pan-req-docs ${requisitos.length ? '' : 'solo-docs'}`}>

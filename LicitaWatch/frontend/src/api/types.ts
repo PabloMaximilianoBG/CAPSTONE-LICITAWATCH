@@ -116,6 +116,8 @@ export interface Licitacion {
   presupuestoMin?: number
   presupuestoMax?: number
   maxPostulantes?: number
+  /** duracion_meses: duración del contrato que gana la Pyme adjudicada; vacío en licitaciones antiguas. */
+  duracionMeses?: number
   imagenUrl?: string
   documentos: DocumentoLicitacion[]
   fechaCierre: string
@@ -167,6 +169,8 @@ export interface PulsoLicitacion {
 
 /** Días mínimos entre la publicación y la fecha de cierre (el backend también lo valida). */
 export const PLAZO_MINIMO_DIAS = 7
+/** Duración máxima del contrato en meses (el backend también lo valida). */
+export const DURACION_MAX_MESES = 120
 
 export interface NuevaLicitacion {
   titulo: string
@@ -176,6 +180,7 @@ export interface NuevaLicitacion {
   presupuestoMin?: number
   presupuestoMax?: number
   maxPostulantes?: number
+  duracionMeses: number
   imagenUrl?: string
   documentos: DocumentoLicitacion[]
   fechaCierre: string

@@ -19,6 +19,7 @@
 \c licitawatch_licitaciones
 \ir migracion_postulacion_archivada.sql
 \ir migracion_documentos_licitacion.sql
+\ir migracion_duracion_licitacion.sql
 
 \echo '== licitawatch_ventas'
 \c licitawatch_ventas

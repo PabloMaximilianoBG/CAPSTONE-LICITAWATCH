@@ -31,7 +31,7 @@
 .td-hero { overflow: hidden; } .td-cover { height: 190px; display: grid; place-items: center; color: rgba(255, 255, 255, .7); background: linear-gradient(120deg, #3b5bff, #0fb5a6) center / cover; }
 .td-head { padding: 24px 28px 26px; display: flex; flex-direction: column; gap: 10px; } .td-head h1 { font-size: 28px; letter-spacing: -.025em; }
 .td-badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; } .td-emp { display: flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 600; }
-.td-facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 8px; } .td-facts div { display: grid; grid-template-columns: auto 1fr; column-gap: 11px; padding: 14px; border-radius: 14px; background: var(--surface-2); align-items: center; }
+.td-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 8px; } .td-facts div { display: grid; grid-template-columns: auto 1fr; column-gap: 11px; padding: 14px; border-radius: 14px; background: var(--surface-2); align-items: center; }
 .td-facts svg { grid-row: span 2; color: var(--accent); } .td-facts span { font-size: 12.5px; color: var(--muted); } .td-facts b { font-size: 15px; }
 .applicants { display: flex; flex-direction: column; gap: 12px; } .applicant { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; flex-wrap: wrap; } .applicant.win { border-color: var(--violet); background: var(--violet-soft); }
 .applicant-main { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 4px; } .applicant-main small { color: var(--muted); } .applicant-main p { color: #2c3858; font-size: 14px; }

@@ -18,6 +18,7 @@ public class Licitacion {
     @Column(name = "presupuesto_min") private BigDecimal presupuestoMin;
     @Column(name = "presupuesto_max") private BigDecimal presupuestoMax;
     @Column(name = "max_postulantes") private Integer maxPostulantes;
+    @Column(name = "duracion_meses") private Integer duracionMeses;   // duración del contrato que gana la Pyme adjudicada
     @Column(name = "imagen_url", columnDefinition = "TEXT") private String imagenUrl;
     @Column(name = "archivo_url", columnDefinition = "TEXT") private String archivoUrl;
     @Column(name = "archivo_nombre") private String archivoNombre;
@@ -32,6 +33,7 @@ public class Licitacion {
     public BigDecimal getPresupuestoMin() { return presupuestoMin; } public void setPresupuestoMin(BigDecimal v) { presupuestoMin = v; }
     public BigDecimal getPresupuestoMax() { return presupuestoMax; } public void setPresupuestoMax(BigDecimal v) { presupuestoMax = v; }
     public Integer getMaxPostulantes() { return maxPostulantes; } public void setMaxPostulantes(Integer v) { maxPostulantes = v; }
+    public Integer getDuracionMeses() { return duracionMeses; } public void setDuracionMeses(Integer v) { duracionMeses = v; }
     public String getImagenUrl() { return imagenUrl; } public void setImagenUrl(String v) { imagenUrl = v; }
     public String getArchivoUrl() { return archivoUrl; } public void setArchivoUrl(String v) { archivoUrl = v; }
     public String getArchivoNombre() { return archivoNombre; } public void setArchivoNombre(String v) { archivoNombre = v; }

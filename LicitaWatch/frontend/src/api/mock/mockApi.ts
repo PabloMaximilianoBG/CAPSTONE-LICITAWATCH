@@ -4,7 +4,7 @@ import type {
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
 import { ApiError } from '../errors'
-import { ERROR_SIN_VERIFICAR, MAX_DOCUMENTOS, PLAZO_MINIMO_DIAS } from '../types'
+import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, MAX_DOCUMENTOS, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
 import { consultarSiiMock } from './sii'
@@ -396,6 +396,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const minimo = new Date(); minimo.setHours(0, 0, 0, 0); minimo.setDate(minimo.getDate() + PLAZO_MINIMO_DIAS)
     if (new Date(d.fechaCierre) < minimo) throw new ApiError(`La fecha de cierre debe dar al menos ${PLAZO_MINIMO_DIAS} días para postular.`, 422)
     if (d.documentos.length > MAX_DOCUMENTOS) throw new ApiError(`Puedes adjuntar hasta ${MAX_DOCUMENTOS} documentos.`, 422)
+    if (!Number.isInteger(d.duracionMeses) || d.duracionMeses < 1 || d.duracionMeses > DURACION_MAX_MESES) throw new ApiError(`La duración del proyecto debe ser de 1 a ${DURACION_MAX_MESES} meses.`, 422)
     // Como en el backend: el primero es el principal (sin id) y los demás son adicionales con su id.
     const documentos = clon(d.documentos).map((x, i) => ({ ...x, id: i === 0 ? undefined : nextId(db, 'documento') }))
     const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), documentos, estado: 'Abierta', createdAt: ahora() }
