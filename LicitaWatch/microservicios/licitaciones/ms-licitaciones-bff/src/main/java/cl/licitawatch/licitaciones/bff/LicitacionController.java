@@ -20,10 +20,14 @@ import java.util.List;
 public class LicitacionController {
     /** contenido = data URL del archivo (solo al publicar o agregar). */
     public record DocumentoDto(@NotBlank @Size(max = 255) String nombre, String tipo, int tamanoKb, String contenido) {}
+    public record DocumentoRequeridoDto(@NotBlank @Size(min = 3, max = 160) String nombre, boolean obligatorio) {}
+    /** contenido = data URL del archivo que sube la Pyme para el documento pedido requisitoId. */
+    public record ArchivoPostulacion(@NotNull Long requisitoId, @NotBlank @Size(max = 255) String nombre, @NotBlank String contenido) {}
     public record NuevaLicitacion(@NotBlank @Size(max = 160) String titulo, @NotBlank String descripcion, @NotNull Integer rubroId, @NotNull Integer regionId,
                                   Long presupuestoMin, Long presupuestoMax, Integer maxPostulantes, @NotNull @Min(1) @Max(120) Integer duracionMeses,
-                                  String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre) {}
-    public record Postular(String mensaje) {}
+                                  String imagenUrl, List<@Valid DocumentoDto> documentos, @NotNull Instant fechaCierre,
+                                  @Size(max = 10) List<@Valid DocumentoRequeridoDto> documentosRequeridos) {}
+    public record Postular(String mensaje, List<@Valid ArchivoPostulacion> documentos) {}
     public record Decision(@NotBlank String estado) {}
     public record Archivar(boolean archivada) {}
 
@@ -46,6 +50,7 @@ public class LicitacionController {
     @GetMapping("/api/licitaciones/referencia")
     public JsonNode referencia(HttpServletRequest r, @RequestParam int rubroId) { Auth.exigir(r, "LICITADOR"); return get("/bs/licitaciones/referencia?rubroId=" + rubroId); }
     @GetMapping("/api/licitaciones/mias") public JsonNode mias(HttpServletRequest r) { Auth.exigir(r, "LICITADOR"); return get("/bs/licitaciones/mias"); }
+    @GetMapping("/api/licitaciones/licitador/{id}/confianza") public JsonNode confianza(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitadores/" + id + "/confianza"); }
     @GetMapping("/api/licitaciones/{id}") public JsonNode obtener(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id); }
     @GetMapping("/api/licitaciones/{id}/documento") public JsonNode documento(HttpServletRequest r, @PathVariable long id) { Auth.sesion(r); return get("/bs/licitaciones/" + id + "/documento"); }
     @GetMapping("/api/licitaciones/{id}/documentos/{docId}")
@@ -73,11 +78,13 @@ public class LicitacionController {
     public JsonNode postulantes(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR", "ADMIN"); return get("/bs/licitaciones/" + id + "/postulantes"); }
 
     @PostMapping("/api/licitaciones/{id}/postular") @ResponseStatus(HttpStatus.CREATED)
-    public JsonNode postular(HttpServletRequest r, @PathVariable long id, @RequestBody Postular b) { Auth.exigir(r, "PYME"); return post("/bs/licitaciones/" + id + "/postular", b); }
+    public JsonNode postular(HttpServletRequest r, @PathVariable long id, @Valid @RequestBody Postular b) { Auth.exigir(r, "PYME"); return post("/bs/licitaciones/" + id + "/postular", b); }
 
     @GetMapping("/api/licitaciones/resumen/licitador") public JsonNode resumenL(HttpServletRequest r) { Auth.exigir(r, "LICITADOR"); return get("/bs/resumen/licitador"); }
     @GetMapping("/api/licitaciones/resumen/pyme") public JsonNode resumenP(HttpServletRequest r) { Auth.exigir(r, "PYME"); return get("/bs/resumen/pyme"); }
 
+    @GetMapping("/api/postulaciones/{id}/documentos/{docId}")
+    public JsonNode documentoPostulacion(HttpServletRequest r, @PathVariable long id, @PathVariable long docId) { Auth.sesion(r); return get("/bs/postulaciones/" + id + "/documentos/" + docId); }
     @GetMapping("/api/postulaciones/mias") public JsonNode misPostulaciones(HttpServletRequest r) { Auth.exigir(r, "PYME"); return get("/bs/postulaciones/mias"); }
     @PostMapping("/api/postulaciones/{id}/decision")
     public JsonNode decision(HttpServletRequest r, @PathVariable long id, @Valid @RequestBody Decision b) { Auth.exigir(r, "LICITADOR"); return post("/bs/postulaciones/" + id + "/decision", b); }

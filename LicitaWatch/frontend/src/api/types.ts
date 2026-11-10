@@ -92,11 +92,44 @@ export interface DocumentoLicitacion {
   /** Vacío en el documento principal; los documentos adicionales traen su id (para verlos o quitarlos). */
   id?: number
   nombre: string
-  tipo: 'PDF' | 'DOCX' | 'XLSX' | 'Otro'
+  tipo: TipoArchivo
   tamanoKb: number
   /** Data URL del archivo: solo se envía al publicar o agregar; para verlo o descargarlo se usa documentoLicitacion(). */
   contenido?: string
 }
+
+/** Catálogo tipo_archivo (JPG y PNG solo los suben las Pymes al postular). */
+export type TipoArchivo = 'PDF' | 'DOCX' | 'XLSX' | 'JPG' | 'PNG' | 'Otro'
+
+/** Documento que el Licitador pide a las Pymes al publicar (licitacion_documento_requerido); id vacío al publicar. */
+export interface DocumentoRequerido {
+  id?: number
+  nombre: string
+  obligatorio: boolean
+}
+
+/** Documento que subió la Pyme al postular (postulacion_documento), sin contenido: se pide con documentoPostulacion(). */
+export interface DocumentoPostulacion {
+  id: number
+  requisitoId?: number
+  /** Nombre del documento pedido al que responde. */
+  requisitoNombre?: string
+  nombre: string
+  tipo: TipoArchivo
+  tamanoKb: number
+  fechaSubida: string
+}
+
+/** Archivo que la Pyme envía al postular para el documento pedido requisitoId (contenido = data URL). */
+export interface ArchivoPostulacion {
+  requisitoId: number
+  nombre: string
+  contenido: string
+}
+
+/** Documentos que el Licitador puede pedir por licitación, y tipos que la Pyme puede subir (el backend también lo valida). */
+export const MAX_REQUERIDOS = 10
+export const EXT_POSTULACION = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png']
 
 /** Documento adjunto con su contenido (data URL) para verlo en la plataforma o descargarlo. */
 export interface ArchivoLicitacion {
@@ -120,6 +153,8 @@ export interface Licitacion {
   duracionMeses?: number
   imagenUrl?: string
   documentos: DocumentoLicitacion[]
+  /** Documentos que la Pyme debe subir al postular; vacío = no se pide nada. */
+  documentosRequeridos?: DocumentoRequerido[]
   fechaCierre: string
   estado: EstadoLicitacion
   createdAt: string
@@ -184,6 +219,21 @@ export interface NuevaLicitacion {
   imagenUrl?: string
   documentos: DocumentoLicitacion[]
   fechaCierre: string
+  documentosRequeridos?: DocumentoRequerido[]
+}
+
+/** Confianza de un licitador (detalle de licitación para la Pyme): solo conteos, nunca datos privados. */
+export interface ConfianzaLicitador {
+  publicadas: number
+  adjudicadas: number
+  /** Fecha de registro del licitador (usuario.created_at); si Usuarios no responde, la de su primera licitación. */
+  desde?: string
+}
+
+/** Borrador del mensaje de postulación de LicitAsist; ia = false si se armó con la plantilla (sin respuesta de la IA). */
+export interface BorradorPostulacion {
+  texto: string
+  ia: boolean
 }
 
 export interface FiltroLicitaciones {
@@ -214,6 +264,8 @@ export interface Postulacion {
   archivada: boolean
   /** Ciudad de la Pyme (su región se obtiene con el catálogo de ciudades). */
   pymeCiudadId?: number
+  /** Documentos que subió la Pyme para lo que pidió el Licitador. */
+  documentos?: DocumentoPostulacion[]
 }
 
 export interface Conversacion {
@@ -446,11 +498,16 @@ export interface Api {
   pulsoLicitacion(id: number): Promise<PulsoLicitacion>
   /** Solo Licitador: Pymes compatibles con la licitación (rubro y región) por tamaño de empresa. */
   radarPymes(rubroId: number, regionId: number): Promise<RadarPymes>
+  /** Cualquier sesión: licitaciones publicadas y adjudicadas del licitador y desde cuándo está en la plataforma. */
+  confianzaLicitador(licitadorId: number): Promise<ConfianzaLicitador>
   cerrarLicitacion(id: number): Promise<Licitacion>
   /** Solo el Licitador dueño y solo si ninguna Pyme ha postulado (409 si ya tiene postulaciones). */
   eliminarLicitacion(id: number): Promise<void>
   postulantes(licitacionId: number): Promise<Postulacion[]>
-  postular(licitacionId: number, mensaje: string): Promise<Postulacion>
+  /** documentos: uno por documento pedido (400 si falta uno obligatorio o el tipo/tamaño no es válido). */
+  postular(licitacionId: number, mensaje: string, documentos?: ArchivoPostulacion[]): Promise<Postulacion>
+  /** La Pyme que postuló, el Licitador dueño o el Admin: archivo que subió la Pyme. */
+  documentoPostulacion(postulacionId: number, docId: number): Promise<ArchivoLicitacion>
   misPostulaciones(): Promise<Postulacion[]>
   /** Solo la Pyme dueña de la postulación. */
   archivarPostulacion(id: number, archivada: boolean): Promise<Postulacion>
@@ -481,6 +538,8 @@ export interface Api {
 
   // LicitAsist (IA)
   preguntarAsistente(texto: string): Promise<MensajeAsistente>
+  /** Solo Pyme Premium (403 si es Estándar): borrador del mensaje de postulación a una licitación abierta. */
+  redactarPostulacion(licitacionId: number): Promise<BorradorPostulacion>
 
   // Administración
   estadisticasAdmin(): Promise<EstadisticasAdmin>

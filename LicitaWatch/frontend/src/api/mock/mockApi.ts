@@ -4,12 +4,12 @@ import type {
   ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
 import { ApiError } from '../errors'
-import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, MAX_DOCUMENTOS, PLAZO_MINIMO_DIAS } from '../types'
+import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, MAX_REQUERIDOS, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
 import { consultarSiiMock } from './sii'
 import { formatearRut, limpiarRut, validarRut, esRutEmpresa, esRutPersona } from '../../lib/rut'
-import { mesCorto, validarEmail, validarPassword } from '../../lib/format'
+import { mesCorto, tipoArchivo, validarEmail, validarPassword } from '../../lib/format'
 
 const TOKEN_KEY = 'lw_token'
 const DAY = 86400000
@@ -120,6 +120,8 @@ function aPostulacion(db: DB, p: PostulacionDB): Postulacion {
     pymeCiudadId: perfil.ciudadId,
     premium: planActual(db, p.pymeId).plan.nombre === 'Premium',
     conversacionId: conv?.id,
+    // Como el backend: sin contenido y con el nombre del documento pedido.
+    documentos: (p.documentos ?? []).map(({ contenido: _c, ...d }) => ({ ...d, requisitoNombre: l.documentosRequeridos?.find((r) => r.id === d.requisitoId)?.nombre })),
   }
 }
 
@@ -362,6 +364,15 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     compatibles.forEach((p) => { if (p.tamanoEmpresaId) porTamano[p.tamanoEmpresaId] = (porTamano[p.tamanoEmpresaId] ?? 0) + 1 })
     return { total: compatibles.length, porTamano, pymeIds: compatibles.map((p) => p.usuarioId).sort((a, b) => a - b) }
   },
+  async confianzaLicitador(licitadorId) {
+    await delay(150)
+    const db = loadDb()
+    actual(db)
+    const u = db.usuarios.find((x) => x.id === licitadorId && x.rol === 'LICITADOR')
+    if (!u) throw new ApiError('Licitador no encontrado.', 404)
+    const suyas = db.licitaciones.filter((l) => l.licitadorId === licitadorId)
+    return { publicadas: suyas.length, adjudicadas: suyas.filter((l) => l.estado === 'Adjudicada').length, desde: u.createdAt }
+  },
   async pulsoLicitacion(id) {
     await delay(150)
     const db = loadDb()
@@ -399,7 +410,12 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (!Number.isInteger(d.duracionMeses) || d.duracionMeses < 1 || d.duracionMeses > DURACION_MAX_MESES) throw new ApiError(`La duración del proyecto debe ser de 1 a ${DURACION_MAX_MESES} meses.`, 422)
     // Como en el backend: el primero es el principal (sin id) y los demás son adicionales con su id.
     const documentos = clon(d.documentos).map((x, i) => ({ ...x, id: i === 0 ? undefined : nextId(db, 'documento') }))
-    const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), documentos, estado: 'Abierta', createdAt: ahora() }
+    const pedidos = (d.documentosRequeridos ?? []).map((r) => ({ nombre: r.nombre.trim(), obligatorio: r.obligatorio }))
+    if (pedidos.length > MAX_REQUERIDOS) throw new ApiError(`Puedes pedir hasta ${MAX_REQUERIDOS} documentos a las Pymes.`, 400)
+    if (pedidos.some((r) => r.nombre.length < 3 || r.nombre.length > 160)) throw new ApiError('El nombre de cada documento solicitado debe tener entre 3 y 160 caracteres.', 400)
+    if (new Set(pedidos.map((r) => r.nombre.toLowerCase())).size < pedidos.length) throw new ApiError('Pediste dos veces el mismo documento.', 400)
+    const l: LicitacionDB = { id: nextId(db, 'licitacion'), licitadorId: u.id, ...clon(d), documentos, estado: 'Abierta', createdAt: ahora(),
+      documentosRequeridos: pedidos.map((r) => ({ ...r, id: nextId(db, 'requerido') })) }
     db.licitaciones.push(l)
     notificar(db, u.id, 'Licitación publicada', 'Licitación publicada', `Tu licitación "${l.titulo}" ya es visible para las Pymes.`)
     // Aviso a las Pymes del mismo rubro: campana para todas, correo solo a las Premium (igual que el backend).
@@ -463,7 +479,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     return db.postulaciones.filter((p) => p.licitacionId === licitacionId).map((p) => aPostulacion(db, p))
       .sort((a, b) => Number(b.premium) - Number(a.premium) || b.fecha.localeCompare(a.fecha))
   },
-  async postular(licitacionId, mensaje) {
+  async postular(licitacionId, mensaje, archivos = []) {
     await delay(600)
     const db = loadDb()
     const u = exigir(db, 'PYME')
@@ -479,11 +495,44 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
         ? `Usaste tus ${plan.postulacionesMes} postulaciones de este mes. Pasa a Premium para postular hasta 7 veces.`
         : `Usaste tus ${plan.postulacionesMes} postulaciones de este mes. Se renuevan el próximo mes.`, 422)
     }
-    const p: PostulacionDB = { id: nextId(db, 'postulacion'), licitacionId: l.id, pymeId: u.id, mensaje: mensaje.trim() || undefined, fecha: ahora(), estado: 'Pendiente', adjudicada: false, updatedAt: ahora() }
+    // Mismas reglas que el backend: uno por documento pedido, obligatorios presentes, PDF/DOC/DOCX/JPG/PNG, 8 MB c/u y 16 MB en total.
+    const pedidos = l.documentosRequeridos ?? []
+    if (!pedidos.length && archivos.length) throw new ApiError('Esta licitación no pide documentos.', 400)
+    let total = 0
+    for (const a of archivos) {
+      const r = pedidos.find((x) => x.id === a.requisitoId)
+      if (!r) throw new ApiError(`El documento "${a.nombre}" no corresponde a lo que pide esta licitación.`, 400)
+      if (archivos.filter((x) => x.requisitoId === a.requisitoId).length > 1) throw new ApiError(`Subiste más de un archivo para "${r.nombre}".`, 400)
+      if (!EXT_POSTULACION.includes(a.nombre.split('.').pop()?.toLowerCase() ?? '')) throw new ApiError(`"${a.nombre}" (${r.nombre}): solo se aceptan archivos PDF, Word (DOC o DOCX), JPG o PNG.`, 400)
+      const bytes = Math.round((a.contenido.length - a.contenido.indexOf(',') - 1) * 3 / 4)
+      if (bytes > MAX_DOCUMENTO_BYTES) throw new ApiError(`"${a.nombre}" (${r.nombre}) supera los 8 MB.`, 400)
+      total += bytes
+    }
+    const falta = pedidos.find((r) => r.obligatorio && !archivos.some((a) => a.requisitoId === r.id))
+    if (falta) throw new ApiError(`Falta el documento obligatorio "${falta.nombre}".`, 400)
+    if (total > MAX_PUBLICAR_BYTES) throw new ApiError('Los documentos no pueden sumar más de 16 MB en total.', 400)
+    const documentos = archivos.map((a) => ({
+      id: nextId(db, 'documentoPostulacion'), requisitoId: a.requisitoId, nombre: a.nombre, tipo: tipoArchivo(a.nombre),
+      tamanoKb: Math.max(1, Math.round((a.contenido.length - a.contenido.indexOf(',') - 1) * 3 / 4 / 1024)), fechaSubida: ahora(), contenido: a.contenido,
+    }))
+    const p: PostulacionDB = { id: nextId(db, 'postulacion'), licitacionId: l.id, pymeId: u.id, mensaje: mensaje.trim() || undefined, fecha: ahora(), estado: 'Pendiente', adjudicada: false, updatedAt: ahora(), documentos }
     db.postulaciones.push(p)
     notificar(db, l.licitadorId, 'Postulación recibida', 'Nueva postulación recibida', `${nombreDe(db, u.id)} postuló a "${l.titulo}".`)
     saveDb()
     return aPostulacion(db, p)
+  },
+  async documentoPostulacion(postulacionId, docId) {
+    await delay(150)
+    const db = loadDb()
+    const u = actual(db)
+    const p = db.postulaciones.find((x) => x.id === postulacionId)
+    if (!p) throw new ApiError('Postulación no encontrada.', 404)
+    const l = db.licitaciones.find((x) => x.id === p.licitacionId)
+    if (u.rol !== 'ADMIN' && p.pymeId !== u.id && l?.licitadorId !== u.id) throw new ApiError('No puedes ver los documentos de esta postulación.', 403)
+    const d = p.documentos?.find((x) => x.id === docId)
+    if (!d) throw new ApiError('Documento no encontrado.', 404)
+    if (!d.contenido) throw new ApiError('Este documento es de ejemplo y no tiene archivo en el modo simulado.', 404)
+    return { nombre: d.nombre, tipo: d.tipo, contenido: d.contenido }
   },
   async misPostulaciones() {
     await delay()
@@ -715,6 +764,26 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     return clon(db.ventas.filter((v) => v.usuarioId === u.id))
   },
 
+  async redactarPostulacion(licitacionId) {
+    await delay(1200)
+    const db = loadDb()
+    const u = exigir(db, 'PYME')
+    if (planActual(db, u.id).plan.nombre !== 'Premium') throw new ApiError('Redactar con IA es un beneficio Premium. Mejora tu plan para usarlo', 403)
+    const l = db.licitaciones.find((x) => x.id === licitacionId)
+    if (!l) throw new ApiError('La licitación no existe.', 404)
+    if (l.estado !== 'Abierta' || new Date(l.fechaCierre) < new Date()) throw new ApiError('Esta licitación ya no recibe postulaciones', 422)
+    // Como la plantilla de respaldo del backend (en modo simulado no hay IA).
+    const p = perfilDe(db, u.id)
+    const rubro = RUBROS.find((r) => r.id === p.rubroId)?.nombre
+    const texto = [
+      `Estimados ${nombreDe(db, l.licitadorId)}:`, '',
+      `En ${p.razonSocial}${rubro ? `, empresa del rubro ${rubro.toLowerCase()}` : ''}, nos interesa postular a «${l.titulo}».`, '',
+      p.descripcionEmpresa?.trim() || '[Cuéntale brevemente a qué se dedica tu empresa]', '',
+      'Cumplimos con los requisitos solicitados: [detalla cómo cumples cada requisito y tu experiencia en trabajos similares].', '',
+      'Quedamos atentos para ampliar la información o coordinar una reunión.', '', 'Saludos cordiales,', p.razonSocial,
+    ].join('\n')
+    return { texto, ia: false }
+  },
   async preguntarAsistente(texto): Promise<MensajeAsistente> {
     await delay(900)
     const db = loadDb()

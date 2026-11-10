@@ -29,14 +29,23 @@ public class LicitacionService {
     // Filas tal como las entrega la capa BD.
     record Lic(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
-               Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales) {}
+               Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales, List<ReqFila> requeridos) {}
     record DocFila(Long id, String nombre, String tipo, int tamanoKb) {}
-    record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
+    record ReqFila(Long id, String nombre, boolean obligatorio) {}
+    record Post(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada,
+                List<PostDocFila> documentos) {}
+    record PostDocFila(Long id, Long requisitoId, String nombre, String tipo, int tamanoKb, Instant fechaSubida) {}
 
     /** 8 MB de archivo ≈ 11,2 millones de caracteres en base64 (más el encabezado del data URL). */
     private static final int MAX_ARCHIVO_B64 = 11_200_200;
     /** Documentos por licitación, contando el principal. */
     static final int MAX_DOCUMENTOS = 5;
+    /** Documentos que el Licitador puede pedir a las Pymes por licitación. */
+    static final int MAX_REQUERIDOS = 10;
+    /** Extensiones que la Pyme puede subir y su tipo en el catálogo tipo_archivo. */
+    private static final Map<String, String> TIPO_POR_EXTENSION = Map.of("pdf", "PDF", "doc", "DOCX", "docx", "DOCX", "jpg", "JPG", "jpeg", "JPG", "png", "PNG");
+    private static final Set<String> MIME_POSTULACION = Set.of("application/pdf", "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "image/jpeg", "image/png");
     /** Al publicar todos los documentos viajan en una sola solicitud: máximo 16 MB entre todos (el resto se agrega después, de a uno). */
     private static final int MAX_PUBLICAR_B64 = 22_400_400;
     private static final Logger log = LoggerFactory.getLogger(LicitacionService.class);
@@ -86,7 +95,8 @@ public class LicitacionService {
         if (l.archivoNombre() != null) docs.add(new DocumentoDto(l.archivoNombre(), l.tipoArchivo() == null ? "Otro" : l.tipoArchivo(), l.archivoKb() == null ? 0 : l.archivoKb(), null, null));
         if (l.adicionales() != null) for (DocFila d : l.adicionales()) docs.add(new DocumentoDto(d.nombre(), d.tipo(), d.tamanoKb(), null, d.id()));
         return new LicitacionDto(l.id(), l.licitadorId(), c.nombre(l.licitadorId()), l.titulo(), l.descripcion(), l.rubroId(), l.regionId(), l.presupuestoMin(),
-                l.presupuestoMax(), l.maxPostulantes(), l.duracionMeses(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId());
+                l.presupuestoMax(), l.maxPostulantes(), l.duracionMeses(), l.imagenUrl(), docs, finDelDia(l.fechaCierre()), estadoEfectivo(l), l.createdAt(), l.postulantes(), l.pymeAdjudicadaId(),
+                l.requeridos() == null ? List.of() : l.requeridos().stream().map(r -> new DocumentoRequeridoDto(r.id(), r.nombre(), r.obligatorio())).toList());
     }
     private List<LicitacionDto> dtos(Collection<Lic> ls) { Ctx c = new Ctx(); return ls.stream().map(l -> dto(l, c)).toList(); }
 
@@ -96,7 +106,13 @@ public class LicitacionService {
         return new PostulacionDto(p.id(), l.id(), l.titulo(), c.nombre(l.licitadorId()), p.pymeId(), c.nombre(p.pymeId()),
                 u.hasNonNull("rubroId") ? u.get("rubroId").asInt() : null, u.hasNonNull("tamanoEmpresaId") ? u.get("tamanoEmpresaId").asInt() : null, c.esPremium(p.pymeId()),
                 p.mensaje(), p.fechaPostulacion().atStartOfDay(ZoneId.systemDefault()).toInstant(), p.estado(), adj, p.updatedAt(), adj ? c.conversaciones.get(p.id()) : null, p.archivada(),
-                u.hasNonNull("ciudadId") ? u.get("ciudadId").asInt() : null);
+                u.hasNonNull("ciudadId") ? u.get("ciudadId").asInt() : null, documentos(p, l));
+    }
+    private static List<DocumentoPostulacionDto> documentos(Post p, Lic l) {
+        if (p.documentos() == null) return List.of();
+        Map<Long, String> nombres = new HashMap<>();
+        if (l.requeridos() != null) l.requeridos().forEach(r -> nombres.put(r.id(), r.nombre()));
+        return p.documentos().stream().map(d -> new DocumentoPostulacionDto(d.id(), d.requisitoId(), nombres.get(d.requisitoId()), d.nombre(), d.tipo(), d.tamanoKb(), d.fechaSubida())).toList();
     }
     private List<PostulacionDto> dtosPost(List<Post> ps, Map<Long, Lic> porId) {
         Ctx c = new Ctx(); c.cargarConversaciones(ps.stream().map(Post::id).toList());
@@ -123,6 +139,7 @@ public class LicitacionService {
         documentos.forEach(LicitacionService::validarArchivo);
         if (documentos.stream().mapToLong(x -> x.contenido() == null ? 0 : x.contenido().length()).sum() > MAX_PUBLICAR_B64)
             throw ApiException.invalido("Al publicar, los documentos no pueden sumar más de 16 MB. Agrega el resto desde el detalle de la licitación.");
+        List<Map<String, Object>> requeridos = requeridos(d.documentosRequeridos());
         DocumentoDto doc = documentos.isEmpty() ? null : documentos.get(0);
         List<Map<String, Object>> adicionales = documentos.stream().skip(1).filter(x -> x.contenido() != null).map(LicitacionService::nuevoDoc).toList();
         Map<String, Object> nueva = new HashMap<>();
@@ -130,7 +147,7 @@ public class LicitacionService {
         nueva.put("rubroId", d.rubroId()); nueva.put("regionId", d.regionId()); nueva.put("presupuestoMin", d.presupuestoMin()); nueva.put("presupuestoMax", d.presupuestoMax());
         nueva.put("maxPostulantes", d.maxPostulantes()); nueva.put("duracionMeses", d.duracionMeses()); nueva.put("imagenUrl", d.imagenUrl()); nueva.put("fechaCierre", cierre);
         nueva.put("archivoNombre", doc == null ? null : doc.nombre()); nueva.put("tipoArchivo", doc == null ? null : doc.tipo());
-        nueva.put("archivoContenido", doc == null ? null : doc.contenido()); nueva.put("adicionales", adicionales);
+        nueva.put("archivoContenido", doc == null ? null : doc.contenido()); nueva.put("adicionales", adicionales); nueva.put("requeridos", requeridos);
         Lic l = interno.post(urlBd + "/bd/licitaciones", nueva, Lic.class);
         interno.notificar(urlNotif, licitadorId, "Licitación publicada", "Licitación publicada", "Tu licitación \"" + l.titulo() + "\" ya es visible para las Pymes del rubro.", false);
         avisos.submit(() -> avisarPymesDelRubro(l));
@@ -231,6 +248,63 @@ public class LicitacionService {
         return obtener(id);
     }
 
+    /** Documentos pedidos a las Pymes al publicar: opcionales, hasta MAX_REQUERIDOS, con nombre de 3 a 160 caracteres y sin repetir. */
+    private static List<Map<String, Object>> requeridos(List<DocumentoRequeridoDto> lista) {
+        if (lista == null || lista.isEmpty()) return List.of();
+        if (lista.size() > MAX_REQUERIDOS) throw ApiException.invalido("Puedes pedir hasta " + MAX_REQUERIDOS + " documentos a las Pymes");
+        Set<String> vistos = new HashSet<>();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (DocumentoRequeridoDto r : lista) {
+            String nombre = r.nombre() == null ? "" : r.nombre().trim();
+            if (nombre.length() < 3 || nombre.length() > 160) throw ApiException.invalido("El nombre de cada documento solicitado debe tener entre 3 y 160 caracteres");
+            if (!vistos.add(nombre.toLowerCase())) throw ApiException.invalido("Pediste dos veces el documento \"" + nombre + "\"");
+            out.add(Map.of("nombre", nombre, "obligatorio", r.obligatorio()));
+        }
+        return out;
+    }
+
+    /**
+     * Documentos de la Pyme al postular: uno por documento pedido, todos los obligatorios presentes, PDF/DOC/DOCX/JPG/PNG,
+     * hasta 8 MB cada uno y 16 MB entre todos (mismas reglas que los documentos de la licitación).
+     */
+    private static List<Map<String, Object>> documentosPostulacion(Lic l, List<ArchivoPostulacion> archivos) {
+        List<ReqFila> pedidos = l.requeridos() == null ? List.of() : l.requeridos();
+        List<ArchivoPostulacion> lista = archivos == null ? List.of() : archivos;
+        if (pedidos.isEmpty() && !lista.isEmpty()) throw ApiException.invalido("Esta licitación no pide documentos");
+        Map<Long, ReqFila> porId = new HashMap<>();
+        pedidos.forEach(r -> porId.put(r.id(), r));
+        Set<Long> subidos = new HashSet<>();
+        long total = 0;
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (ArchivoPostulacion a : lista) {
+            ReqFila r = a.requisitoId() == null ? null : porId.get(a.requisitoId());
+            if (r == null) throw ApiException.invalido("El documento \"" + a.nombre() + "\" no corresponde a lo que pide esta licitación");
+            if (!subidos.add(r.id())) throw ApiException.invalido("Subiste más de un archivo para \"" + r.nombre() + "\"");
+            String nombre = a.nombre() == null ? "" : a.nombre().trim(), c = a.contenido() == null ? "" : a.contenido();
+            String ext = nombre.contains(".") ? nombre.substring(nombre.lastIndexOf('.') + 1).toLowerCase() : "";
+            int coma = c.indexOf(";base64,");
+            String mime = c.startsWith("data:") && coma > 5 ? c.substring(5, coma).toLowerCase() : "";
+            if (!TIPO_POR_EXTENSION.containsKey(ext) || !MIME_POSTULACION.contains(mime))
+                throw ApiException.invalido("\"" + nombre + "\" (" + r.nombre() + "): solo se aceptan archivos PDF, Word (DOC o DOCX), JPG o PNG");
+            if (c.length() > MAX_ARCHIVO_B64) throw ApiException.invalido("\"" + nombre + "\" (" + r.nombre() + ") supera los 8 MB");
+            total += c.length();
+            Map<String, Object> m = new HashMap<>();
+            m.put("requisitoId", r.id()); m.put("nombre", nombre); m.put("tipo", TIPO_POR_EXTENSION.get(ext)); m.put("contenido", c);
+            out.add(m);
+        }
+        for (ReqFila r : pedidos)
+            if (r.obligatorio() && !subidos.contains(r.id())) throw ApiException.invalido("Falta el documento obligatorio \"" + r.nombre() + "\"");
+        if (total > MAX_PUBLICAR_B64) throw ApiException.invalido("Los documentos no pueden sumar más de 16 MB en total");
+        return out;
+    }
+
+    /** Archivo que subió la Pyme: lo ven la Pyme que postuló, el Licitador dueño de la licitación y el Admin. */
+    public ArchivoDto documentoPostulacion(long postulacionId, long docId, long usuarioId, boolean admin) {
+        Post p = post(postulacionId);
+        if (!admin && p.pymeId() != usuarioId && lic(p.licitacionId()).licitadorId() != usuarioId) throw ApiException.prohibido("No puedes ver los documentos de esta postulación");
+        return interno.get(urlBd + "/bd/postulaciones/" + postulacionId + "/documentos/" + docId, ArchivoDto.class);
+    }
+
     private static void validarArchivo(DocumentoDto d) {
         if (d.contenido() == null) return;
         if (!d.contenido().startsWith("data:") || !d.contenido().contains(";base64,")) throw ApiException.invalido("El documento \"" + d.nombre() + "\" no es válido");
@@ -288,7 +362,7 @@ public class LicitacionService {
         return new PulsoLicitacion(ps.size(), l.maxPostulantes(), porDia.get(6).valor(), porDia, estados);
     }
 
-    public PostulacionDto postular(long pymeId, long licitacionId, String mensaje) {
+    public PostulacionDto postular(long pymeId, long licitacionId, String mensaje, List<ArchivoPostulacion> archivos) {
         Lic l = lic(licitacionId);
         if (!es(l, "Abierta") || l.fechaCierre().isBefore(LocalDate.now())) throw ApiException.conflicto("Esta licitación ya está cerrada");
         List<Post> deEsta = posts("?licitacionIds=" + licitacionId);
@@ -298,9 +372,10 @@ public class LicitacionService {
         JsonNode sus = interno.get(urlVentas + "/internal/suscripciones/" + pymeId, JsonNode.class);          // límite según plan (3 Estándar / 7 Premium)
         int limite = sus.path("plan").path("postulacionesMes").asInt(3); boolean premium = "Premium".equals(sus.path("plan").path("nombre").asText());
         if (usadasMes(pymeId) >= limite) throw new ApiException(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY, "Alcanzaste el límite de " + limite + " postulaciones este mes" + (premium ? "" : ". Pasa a Premium para postular más."));
+        List<Map<String, Object>> documentos = documentosPostulacion(l, archivos);
 
         Map<String, Object> nueva = new HashMap<>();
-        nueva.put("licitacionId", licitacionId); nueva.put("pymeId", pymeId); nueva.put("mensaje", mensaje);
+        nueva.put("licitacionId", licitacionId); nueva.put("pymeId", pymeId); nueva.put("mensaje", mensaje); nueva.put("documentos", documentos);
         Post p = interno.post(urlBd + "/bd/postulaciones", nueva, Post.class);
 
         // El chat NO se abre al postular: solo cuando el Licitador aprueba y la licitación queda adjudicada (ver decidir).
@@ -357,6 +432,19 @@ public class LicitacionService {
     }
 
     // ---------- paneles ----------
+    record ConteoLicitador(long publicadas, long adjudicadas, Instant primera) {}
+
+    /** «En la plataforma desde» = fecha de registro del usuario; si Usuarios no responde, la de su primera licitación. */
+    public ConfianzaLicitador confianza(long licitadorId) {
+        JsonNode u;
+        try { u = interno.get(urlUsuarios + "/internal/usuarios/" + licitadorId + "/resumen", JsonNode.class); }
+        catch (Exception e) { u = null; }
+        if (u != null && !"LICITADOR".equals(u.path("rol").asText())) throw ApiException.noEncontrado("Licitador no encontrado");
+        ConteoLicitador c = interno.get(urlBd + "/bd/licitadores/" + licitadorId + "/conteos", ConteoLicitador.class);
+        Instant desde = u != null && u.hasNonNull("createdAt") ? Instant.parse(u.get("createdAt").asText()) : c.primera();
+        return new ConfianzaLicitador(c.publicadas(), c.adjudicadas(), desde);
+    }
+
     public ResumenLicitador resumenLicitador(long licitadorId) {
         List<Lic> mias = lics("?licitadorId=" + licitadorId);
         List<Post> recibidas = mias.isEmpty() ? List.of() : posts("?licitacionIds=" + junta(mias.stream().map(Lic::id).toList()));

@@ -23,13 +23,16 @@ const franjas = (() => {
 /**
  * Mapa de Chile con la región de la licitación resaltada y un punto verde por cada región de origen de las postulaciones
  * (el punto crece con la cantidad). nombreRegion se usa para el aria-label y los títulos.
+ * marcador: región de la empresa de quien mira (detalle para la Pyme), con un anillo.
  */
-export function ChileMap({ regionId, origenes = {}, nombreRegion, alto = ALTO }: {
-  regionId?: number; origenes?: Record<number, number>; nombreRegion: (id: number) => string; alto?: number
+export function ChileMap({ regionId, origenes = {}, nombreRegion, alto = ALTO, marcador }: {
+  regionId?: number; origenes?: Record<number, number>; nombreRegion: (id: number) => string; alto?: number; marcador?: number
 }) {
+  const mk = marcador ? franjas[marcador - 1] : undefined
   const conPostulaciones = Object.entries(origenes).filter(([, n]) => n > 0)
   const etiqueta = `Mapa de Chile. Región de la licitación: ${regionId ? nombreRegion(regionId) : 'sin definir'}.`
-    + (conPostulaciones.length ? ` Postulaciones desde: ${conPostulaciones.map(([r, n]) => `${nombreRegion(Number(r))} (${n})`).join(', ')}.` : ' Aún sin postulaciones.')
+    + (marcador ? ` Tu empresa: ${nombreRegion(marcador)}.`
+      : conPostulaciones.length ? ` Postulaciones desde: ${conPostulaciones.map(([r, n]) => `${nombreRegion(Number(r))} (${n})`).join(', ')}.` : ' Aún sin postulaciones.')
   return (
     <svg className="chile-map" viewBox={`0 0 60 ${ALTO}`} height={alto} role="img" aria-label={etiqueta}>
       {franjas.map((f) => (
@@ -40,6 +43,7 @@ export function ChileMap({ regionId, origenes = {}, nombreRegion, alto = ALTO }:
           <title>{`${origenes[f.regionId]} postulación${origenes[f.regionId] === 1 ? '' : 'es'} desde ${nombreRegion(f.regionId)}`}</title>
         </circle>
       ))}
+      {mk && <circle cx={mk.cx} cy={(mk.y0 + mk.y1) / 2} r={3.2} className="marcador"><title>{`Tu empresa: ${nombreRegion(mk.regionId)}`}</title></circle>}
     </svg>
   )
 }

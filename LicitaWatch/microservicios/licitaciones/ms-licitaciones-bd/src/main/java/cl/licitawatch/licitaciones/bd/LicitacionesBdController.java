@@ -21,27 +21,56 @@ public class LicitacionesBdController {
     /** Fila de licitacion con el nombre de sus catálogos, más el n.º de postulaciones y la Pyme con la postulación aprobada (si hay). */
     public record LicFila(Long id, Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                           Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoUrl, String archivoNombre, String tipoArchivo, LocalDate fechaCierre, String estado,
-                          Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales) {}
+                          Instant createdAt, long postulantes, Long pymeAdjudicadaId, Integer archivoKb, List<DocFila> adicionales, List<ReqFila> requeridos) {}
+    /** Documento que el Licitador pide a las Pymes (licitacion_documento_requerido). */
+    public record ReqFila(Long id, String nombre, boolean obligatorio) {}
     /** Documento adicional (tabla documento_licitacion) sin su contenido. */
     public record DocFila(Long id, String nombre, String tipo, int tamanoKb) {}
     /** Documento complementario con su contenido (data URL guardado en archivo_url); contenido null si se publicó sin archivo real. */
     public record ArchivoFila(String nombre, String tipo, String contenido) {}
-    public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada) {}
+    public record PostFila(Long id, Long licitacionId, Long pymeId, String mensaje, LocalDate fechaPostulacion, String estado, Instant updatedAt, boolean archivada,
+                           List<PostDocFila> documentos) {}
+    /** Documento subido por la Pyme (postulacion_documento) sin su contenido. */
+    public record PostDocFila(Long id, Long requisitoId, String nombre, String tipo, int tamanoKb, Instant fechaSubida) {}
     public record NuevaLic(Long licitadorId, String titulo, String descripcion, Integer rubroId, Integer regionId, Long presupuestoMin, Long presupuestoMax,
                            Integer maxPostulantes, Integer duracionMeses, String imagenUrl, String archivoNombre, String tipoArchivo, String archivoContenido, LocalDate fechaCierre,
-                           List<NuevoDoc> adicionales) {}
+                           List<NuevoDoc> adicionales, List<NuevoReq> requeridos) {}
+    public record NuevoReq(String nombre, boolean obligatorio) {}
     /** Documento adicional nuevo: contenido = data URL (base64). */
     public record NuevoDoc(String nombre, String tipo, String contenido) {}
-    public record NuevaPost(Long licitacionId, Long pymeId, String mensaje) {}
+    public record NuevaPost(Long licitacionId, Long pymeId, String mensaje, List<NuevoPostDoc> documentos) {}
+    /** Archivo de la Pyme para un documento pedido: contenido = data URL (base64). La BS ya validó tipo, tamaño y obligatorios. */
+    public record NuevoPostDoc(Long requisitoId, String nombre, String tipo, String contenido) {}
     public record Estado(String estado) {}
     public record Archivo(boolean archivada) {}
+    /** Conteos públicos de un licitador (confianza): publicadas, adjudicadas y la fecha de su primera licitación. */
+    public record ConteoLicitador(long publicadas, long adjudicadas, Instant primera) {}
 
     private final LicitacionRepo lics; private final PostulacionRepo posts; private final EstadoLicitacionRepo estadosLic; private final EstadoPostulacionRepo estadosPost;
-    private final TipoArchivoRepo tipos; private final DocumentoLicitacionRepo docs;
+    private final TipoArchivoRepo tipos; private final DocumentoLicitacionRepo docs; private final DocumentoRequeridoRepo reqs; private final DocumentoPostulacionRepo postDocs;
 
     public LicitacionesBdController(LicitacionRepo lics, PostulacionRepo posts, EstadoLicitacionRepo estadosLic, EstadoPostulacionRepo estadosPost, TipoArchivoRepo tipos,
-                                    DocumentoLicitacionRepo docs) {
+                                    DocumentoLicitacionRepo docs, DocumentoRequeridoRepo reqs, DocumentoPostulacionRepo postDocs) {
         this.lics = lics; this.posts = posts; this.estadosLic = estadosLic; this.estadosPost = estadosPost; this.tipos = tipos; this.docs = docs;
+        this.reqs = reqs; this.postDocs = postDocs;
+    }
+
+    /** Documentos pedidos de varias licitaciones en una sola consulta. */
+    private Map<Long, List<ReqFila>> requeridos(Collection<Long> ids) {
+        Map<Long, List<ReqFila>> out = new HashMap<>();
+        if (ids.isEmpty()) return out;
+        for (DocumentoRequerido r : reqs.findByLicitacionIdInOrderById(ids))
+            out.computeIfAbsent(r.getLicitacionId(), k -> new ArrayList<>()).add(new ReqFila(r.getId(), r.getNombre(), r.isObligatorio()));
+        return out;
+    }
+    /** Documentos subidos de varias postulaciones en una sola consulta (sin leer su contenido). */
+    private Map<Long, List<PostDocFila>> docsPostulacion(Collection<Long> ids) {
+        Map<Long, List<PostDocFila>> out = new HashMap<>();
+        if (ids.isEmpty()) return out;
+        for (DocPostResumen d : postDocs.resumen(ids))
+            out.computeIfAbsent(d.getPostulacionId(), k -> new ArrayList<>()).add(new PostDocFila(d.getId(), d.getRequisitoId(), d.getNombre(),
+                    d.getTipo() == null ? "Otro" : d.getTipo(), Math.max(1, (int) (d.getLargo() * 3L / 4 / 1024)), d.getFechaSubida()));
+        return out;
     }
 
     /** Documentos adicionales de varias licitaciones en una sola consulta (sin leer su contenido). */
@@ -53,8 +82,10 @@ public class LicitacionesBdController {
         return out;
     }
 
-    private LicFila fila(Licitacion l) { return fila(l, adicionales(List.of(l.getId())).getOrDefault(l.getId(), List.of())); }
-    private LicFila fila(Licitacion l, List<DocFila> adicionales) {
+    private LicFila fila(Licitacion l) {
+        return fila(l, adicionales(List.of(l.getId())).getOrDefault(l.getId(), List.of()), requeridos(List.of(l.getId())).getOrDefault(l.getId(), List.of()));
+    }
+    private LicFila fila(Licitacion l, List<DocFila> adicionales, List<ReqFila> requeridos) {
         Long adjudicada = null;
         if ("Adjudicada".equals(l.getEstado().getNombre()))
             adjudicada = posts.findByLicitacionId(l.getId()).stream().filter(p -> "Aprobada".equals(p.getEstado().getNombre())).map(Postulacion::getPymeId).findFirst().orElse(null);
@@ -63,12 +94,16 @@ public class LicitacionesBdController {
         Integer kb = conContenido ? Math.max(1, (int) ((url.length() - url.indexOf(',') - 1) * 3L / 4 / 1024)) : null;
         return new LicFila(l.getId(), l.getLicitadorId(), l.getTitulo(), l.getDescripcion(), l.getRubroId(), l.getRegionId(), aLong(l.getPresupuestoMin()), aLong(l.getPresupuestoMax()),
                 l.getMaxPostulantes(), l.getDuracionMeses(), l.getImagenUrl(), conContenido ? null : url, l.getArchivoNombre(), l.getTipoArchivo() == null ? null : l.getTipoArchivo().getNombre(), l.getFechaCierre(),
-                l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada, kb, adicionales);
+                l.getEstado().getNombre(), l.getCreatedAt(), posts.countByLicitacionId(l.getId()), adjudicada, kb, adicionales, requeridos);
     }
-    private static PostFila fila(Postulacion p) { return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt(), p.isArchivada()); }
+    private PostFila fila(Postulacion p) { return fila(p, docsPostulacion(List.of(p.getId())).getOrDefault(p.getId(), List.of())); }
+    private static PostFila fila(Postulacion p, List<PostDocFila> documentos) {
+        return new PostFila(p.getId(), p.getLicitacionId(), p.getPymeId(), p.getMensaje(), p.getFechaPostulacion(), p.getEstado().getNombre(), p.getUpdatedAt(), p.isArchivada(), documentos);
+    }
     private List<LicFila> filas(Collection<Licitacion> ls) {
-        Map<Long, List<DocFila>> ad = adicionales(ls.stream().map(Licitacion::getId).toList());
-        return ls.stream().map(l -> fila(l, ad.getOrDefault(l.getId(), List.of()))).toList();
+        List<Long> ids = ls.stream().map(Licitacion::getId).toList();
+        Map<Long, List<DocFila>> ad = adicionales(ids); Map<Long, List<ReqFila>> rq = requeridos(ids);
+        return ls.stream().map(l -> fila(l, ad.getOrDefault(l.getId(), List.of()), rq.getOrDefault(l.getId(), List.of()))).toList();
     }
     private static Long aLong(BigDecimal b) { return b == null ? null : b.longValue(); }
     private static BigDecimal aDec(Long l) { return l == null ? null : BigDecimal.valueOf(l); }
@@ -95,6 +130,12 @@ public class LicitacionesBdController {
 
     @GetMapping("/licitaciones/{id}") public LicFila obtener(@PathVariable long id) { return fila(lic(id)); }
 
+    @GetMapping("/licitadores/{id}/conteos")
+    public ConteoLicitador conteos(@PathVariable long id) {
+        return new ConteoLicitador(lics.countByLicitadorId(id), lics.countByLicitadorIdAndEstadoNombre(id, "Adjudicada"),
+                lics.findFirstByLicitadorIdOrderByCreatedAtAsc(id).map(Licitacion::getCreatedAt).orElse(null));
+    }
+
     @GetMapping("/licitaciones/{id}/archivo")
     public ArchivoFila archivo(@PathVariable long id) {
         Licitacion l = lic(id);
@@ -117,6 +158,11 @@ public class LicitacionesBdController {
         }
         l = lics.save(l);
         if (d.adicionales() != null) for (NuevoDoc n : d.adicionales()) guardarDoc(l.getId(), n);
+        if (d.requeridos() != null) for (NuevoReq n : d.requeridos()) {
+            DocumentoRequerido r = new DocumentoRequerido();
+            r.setLicitacionId(l.getId()); r.setNombre(n.nombre()); r.setObligatorio(n.obligatorio());
+            reqs.save(r);
+        }
         return fila(l);
     }
 
@@ -158,7 +204,7 @@ public class LicitacionesBdController {
     /** Borra la licitación. Si en ese instante una Pyme postuló, la FK postulacion → licitacion lo impide (409). */
     @DeleteMapping("/licitaciones/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @Transactional
     public void eliminar(@PathVariable long id) {
-        try { docs.deleteByLicitacionId(id); lics.delete(lic(id)); lics.flush(); }
+        try { docs.deleteByLicitacionId(id); reqs.deleteByLicitacionId(id); lics.delete(lic(id)); lics.flush(); }
         catch (DataIntegrityViolationException e) { throw ApiException.conflicto("Una Pyme acaba de postular a esta licitación, por lo que ya no se puede eliminar."); }
     }
 
@@ -172,7 +218,8 @@ public class LicitacionesBdController {
     public List<PostFila> postulaciones(@RequestParam(required = false) List<Long> licitacionIds, @RequestParam(required = false) Long pymeId, @RequestParam(required = false) List<Long> ids) {
         List<Postulacion> l = ids != null ? posts.findAllById(ids) : pymeId != null ? posts.findByPymeIdOrderByFechaPostulacionDesc(pymeId)
                 : licitacionIds != null ? licitacionIds.stream().flatMap(x -> posts.findByLicitacionId(x).stream()).toList() : posts.findAll();
-        return l.stream().map(LicitacionesBdController::fila).toList();
+        Map<Long, List<PostDocFila>> ds = docsPostulacion(l.stream().map(Postulacion::getId).toList());
+        return l.stream().map(p -> fila(p, ds.getOrDefault(p.getId(), List.of()))).toList();
     }
 
     @GetMapping("/postulaciones/{id}") public PostFila postulacion(@PathVariable long id) { return fila(post(id)); }
@@ -183,14 +230,31 @@ public class LicitacionesBdController {
         return Map.of("total", pymeId == null ? posts.count() : posts.countByPymeIdAndFechaPostulacionGreaterThanEqual(pymeId, desde == null ? LocalDate.EPOCH : desde));
     }
 
-    /** Nueva postulación 'Pendiente'. La restricción única (licitacion_id, pyme_id) evita postular dos veces. */
+    /**
+     * Nueva postulación 'Pendiente' con sus documentos, en una sola transacción: si un archivo falla no queda la postulación a medias.
+     * La restricción única (licitacion_id, pyme_id) evita postular dos veces.
+     */
     @PostMapping("/postulaciones") @Transactional
     public PostFila postular(@RequestBody NuevaPost d) {
         lic(d.licitacionId());
         Postulacion p = new Postulacion();
         p.setLicitacionId(d.licitacionId()); p.setPymeId(d.pymeId()); p.setMensaje(d.mensaje()); p.setEstado(ep("Pendiente"));
-        try { return fila(posts.saveAndFlush(p)); }
+        try { p = posts.saveAndFlush(p); }
         catch (DataIntegrityViolationException e) { throw ApiException.conflicto("Ya postulaste a esta licitación"); }
+        if (d.documentos() != null) for (NuevoPostDoc n : d.documentos()) {
+            DocumentoPostulacion doc = new DocumentoPostulacion();
+            doc.setPostulacionId(p.getId()); doc.setRequisitoId(n.requisitoId()); doc.setNombreArchivo(n.nombre()); doc.setArchivoUrl(n.contenido()); doc.setTipoArchivo(tipo(n.tipo()));
+            postDocs.save(doc);
+        }
+        postDocs.flush();
+        return fila(p);
+    }
+
+    /** Archivo que subió la Pyme (la BS valida quién puede verlo). */
+    @GetMapping("/postulaciones/{id}/documentos/{docId}")
+    public ArchivoFila documentoPostulacion(@PathVariable long id, @PathVariable long docId) {
+        DocumentoPostulacion d = postDocs.findById(docId).filter(x -> x.getPostulacionId().equals(id)).orElseThrow(() -> ApiException.noEncontrado("Documento no encontrado"));
+        return new ArchivoFila(d.getNombreArchivo(), d.getTipoArchivo() == null ? "Otro" : d.getTipoArchivo().getNombre(), d.getArchivoUrl());
     }
 
     /**
@@ -217,7 +281,16 @@ public class LicitacionesBdController {
     /** Al eliminar una cuenta: sus licitaciones (con sus postulaciones y documentos) y sus postulaciones. */
     @DeleteMapping("/usuarios/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @Transactional
     public void eliminarUsuario(@PathVariable long id) {
-        for (Licitacion l : lics.findByLicitadorIdOrderByCreatedAtDesc(id)) { posts.deleteByLicitacionId(l.getId()); docs.deleteByLicitacionId(l.getId()); }
-        lics.deleteByLicitadorId(id); posts.deleteByPymeId(id);
+        for (Licitacion l : lics.findByLicitadorIdOrderByCreatedAtDesc(id)) {
+            borrarDocsPostulaciones(posts.findByLicitacionId(l.getId()));
+            posts.deleteByLicitacionId(l.getId()); docs.deleteByLicitacionId(l.getId()); reqs.deleteByLicitacionId(l.getId());
+        }
+        lics.deleteByLicitadorId(id);
+        borrarDocsPostulaciones(posts.findByPymeIdOrderByFechaPostulacionDesc(id));
+        posts.deleteByPymeId(id);
+    }
+
+    private void borrarDocsPostulaciones(List<Postulacion> ps) {
+        if (!ps.isEmpty()) postDocs.deleteByPostulacionIdIn(ps.stream().map(Postulacion::getId).toList());
     }
 }

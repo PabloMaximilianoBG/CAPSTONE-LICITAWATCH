@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api'
 import { ApiError } from '../../api/errors'
-import { MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, type DocumentoLicitacion, type Plan, type Postulacion } from '../../api/types'
+import { EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, type ArchivoLicitacion, type ArchivoPostulacion, type DocumentoLicitacion,
+  type DocumentoPostulacion, type Plan, type Postulacion } from '../../api/types'
 import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, Modal, Progress, Textarea, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
 import { VolverLink } from '../../components/app/shared'
 import { TenderPanorama } from '../licitador/TenderPanorama'
+import { ConfianzaLicitador, RedactarConIA, TenderDetailPyme } from '../pyme/TenderDetailPyme'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
+import { esPremium } from '../../lib/plan'
 import { diasHasta, duracionTexto, fechaCorta, hace, rangoPresupuesto, clp, tipoArchivo } from '../../lib/format'
 
 export function TenderDetail({ id }: { id: number }) {
@@ -26,21 +29,28 @@ export function TenderDetail({ id }: { id: number }) {
   const [confirmar, setConfirmar] = useState<{ tipo: 'adjudicar' | 'cerrar' | 'eliminar'; p?: Postulacion } | null>(null)
   const [limite, setLimite] = useState(false)   // pop-up: alcanzó las postulaciones del mes
   const [premium, setPremium] = useState<Plan | null>(null)
-  // Documento en curso: «ver-<clave>» o «descargar-<clave>» (clave = id del adicional o «p» para el principal).
+  // Documento en curso: «ver-<clave>» o «descargar-<clave>» (ver Abrible).
   const [cargandoDoc, setCargandoDoc] = useState<string | null>(null)
-  const [visor, setVisor] = useState<{ doc: DocumentoLicitacion; url: string; mime: string } | null>(null)
+  const [visor, setVisor] = useState<{ doc: Abrible; url: string; mime: string } | null>(null)
+  // Archivos que la Pyme sube para los documentos pedidos (por id del documento pedido) y los obligatorios que faltaron al enviar.
+  const [archivos, setArchivos] = useState<Record<number, ArchivoPostulacion & { tamanoKb: number }>>({})
+  const [faltan, setFaltan] = useState<number[]>([])
+  const refArchivo = useRef<HTMLInputElement>(null)
+  const destino = useRef<number | null>(null)   // documento pedido al que va el próximo archivo elegido
   const [subiendoDoc, setSubiendoDoc] = useState(false)
   const [quitarDoc, setQuitarDoc] = useState<DocumentoLicitacion | null>(null)
   const refDoc = useRef<HTMLInputElement>(null)
   const [resaltada, setResaltada] = useState<number | null>(null)   // postulación elegida desde la vista panorámica
   useEffect(() => () => { if (visor) URL.revokeObjectURL(visor.url) }, [visor])
 
-  const clave = (d: DocumentoLicitacion) => d.id ?? 'p'
+  /** Documentos de la licitación (clave = id del adicional o «p» para el principal) y los que subió una Pyme (clave «post-<id>»). */
+  const deLicitacion = (d: DocumentoLicitacion): Abrible => ({ clave: String(d.id ?? 'p'), nombre: d.nombre, cargar: () => api.documentoLicitacion(id, d.id) })
+  const dePostulacion = (p: Postulacion, d: DocumentoPostulacion): Abrible => ({ clave: `post-${d.id}`, nombre: d.nombre, cargar: () => api.documentoPostulacion(p.id, d.id) })
   /** Pide el archivo (con la sesión) y lo muestra en la plataforma o lo descarga. */
-  const abrirDocumento = async (d: DocumentoLicitacion, modo: 'ver' | 'descargar') => {
-    setCargandoDoc(`${modo}-${clave(d)}`)
+  const abrirDocumento = async (d: Abrible, modo: 'ver' | 'descargar') => {
+    setCargandoDoc(`${modo}-${d.clave}`)
     try {
-      const a = await api.documentoLicitacion(id, d.id)
+      const a = await d.cargar()
       const blob = await (await fetch(a.contenido)).blob()
       const url = URL.createObjectURL(blob)
       if (modo === 'descargar') {
@@ -91,10 +101,35 @@ export function TenderDetail({ id }: { id: number }) {
     setLimite(true)
     if (!premium) api.planes().then((ps) => setPremium(ps.find((p) => p.nombre === 'Premium') ?? null)).catch(() => { /* el pop-up funciona sin el detalle */ })
   }
+  const pedidos = l.documentosRequeridos ?? []
+  /** Archivo elegido para un documento pedido: PDF, Word, JPG o PNG, hasta 8 MB y 16 MB entre todos (el backend repite las reglas). */
+  const elegirArchivo = (f?: File) => {
+    const reqId = destino.current
+    if (!f || reqId == null) return
+    if (!EXT_POSTULACION.includes(f.name.split('.').pop()?.toLowerCase() ?? '')) { toast.error(`«${f.name}»: solo se aceptan archivos PDF, Word (DOC o DOCX), JPG o PNG.`); return }
+    if (f.size > MAX_DOCUMENTO_BYTES) { toast.error(`«${f.name}» supera los 8 MB.`); return }
+    const otros = Object.entries(archivos).filter(([k]) => Number(k) !== reqId).reduce((s, [, a]) => s + a.tamanoKb * 1024, 0)
+    if (otros + f.size > MAX_PUBLICAR_BYTES) { toast.error('Los documentos no pueden sumar más de 16 MB en total.'); return }
+    const r = new FileReader()
+    r.onload = () => {
+      setArchivos((a) => ({ ...a, [reqId]: { requisitoId: reqId, nombre: f.name, contenido: String(r.result), tamanoKb: Math.max(1, Math.round(f.size / 1024)) } }))
+      setFaltan((x) => x.filter((k) => k !== reqId))
+    }
+    r.onerror = () => toast.error(`No se pudo leer «${f.name}».`)
+    r.readAsDataURL(f)
+  }
+  const quitarArchivo = (reqId: number) => setArchivos(({ [reqId]: _quitado, ...resto }) => resto)
+
   const postular = async () => {
     if (sub.data && restantes <= 0) { avisarLimite(); return }
+    const sinSubir = pedidos.filter((r) => r.obligatorio && r.id != null && !archivos[r.id]).map((r) => r.id!)
+    setFaltan(sinSubir)
+    if (sinSubir.length) { toast.error(sinSubir.length === 1 ? 'Falta un documento obligatorio.' : `Faltan ${sinSubir.length} documentos obligatorios.`); return }
     setEnviando(true)
-    try { await api.postular(l.id, mensaje); toast.ok('¡Postulación enviada! Te avisaremos cuando el Licitador la revise.'); setMensaje(''); recargar() }
+    try {
+      await api.postular(l.id, mensaje, Object.values(archivos).map(({ tamanoKb: _t, ...a }) => a))
+      toast.ok('¡Postulación enviada! Te avisaremos cuando el Licitador la revise.'); setMensaje(''); setArchivos({}); recargar()
+    }
     catch (e) {
       if (e instanceof ApiError && e.status === 422) { avisarLimite(); sub.recargar() }   // el backend también valida el límite
       else toast.error((e as Error).message)
@@ -121,11 +156,11 @@ export function TenderDetail({ id }: { id: number }) {
   const docsLista = l.documentos.length === 0 ? <p className="muted-p">{puedeEditarDocs ? 'Aún no adjuntas documentos. Agrega bases técnicas, anexos o planos para que las Pymes postulen mejor informadas.' : 'El Licitador no adjuntó documentos.'}</p> : (
     <ul className="doc-list">
       {l.documentos.map((d) => (
-        <li key={clave(d)}>
+        <li key={deLicitacion(d).clave}>
           <span className="doc-ic"><Icon name="file" size={18} /></span><div><b title={d.nombre}>{d.nombre}</b><small>{d.id == null && l.documentos.length > 1 ? 'Documento principal · ' : ''}{d.tipo}{d.tamanoKb ? ` · ${d.tamanoKb} KB` : ''}</small></div>
           <div className="doc-acciones">
-            <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'ver')}>Ver</Button>
-            <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${clave(d)}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(d, 'descargar')}>Descargar</Button>
+            <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${deLicitacion(d).clave}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(deLicitacion(d), 'ver')}>Ver</Button>
+            <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${deLicitacion(d).clave}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(deLicitacion(d), 'descargar')}>Descargar</Button>
             {puedeEditarDocs && d.id != null && <button className="icon-btn" onClick={() => setQuitarDoc(d)} aria-label={`Quitar ${d.nombre}`} title="Quitar documento"><Icon name="trash" size={16} /></button>}
           </div>
         </li>
@@ -147,7 +182,82 @@ export function TenderDetail({ id }: { id: number }) {
     <Card>
       <CardHeader icon="building" title="Publicada por" />
       <div className="who"><Avatar nombre={l.licitadorNombre} size={46} /><div><b>{l.licitadorNombre}</b><small>Publicada el {fechaCorta(l.createdAt)}</small></div></div>
+      {rol === 'PYME' && <ConfianzaLicitador licitadorId={l.licitadorId} />}
       {!esDueno && l.presupuestoMax && <p className="muted-p">Presupuesto máximo referencial: <b>{clp(l.presupuestoMax)}</b></p>}
+    </Card>
+  )
+  /** Documentos que subió la Pyme, con ver y descargar (los ve el Licitador dueño, el Admin y la propia Pyme). */
+  const docsDePostulacion = (p: Postulacion) => !p.documentos?.length ? null : (
+    <ul className="doc-list doc-list-post">
+      {p.documentos.map((d) => {
+        const a = dePostulacion(p, d)
+        return (
+          <li key={d.id}>
+            <span className="doc-ic"><Icon name="filecheck" size={18} /></span><div><b title={d.requisitoNombre ?? d.nombre}>{d.requisitoNombre ?? 'Documento'}</b><small>{d.nombre} · {d.tamanoKb} KB</small></div>
+            <div className="doc-acciones">
+              <Button size="sm" variant="soft" icon="eye" loading={cargandoDoc === `ver-${a.clave}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(a, 'ver')}>Ver</Button>
+              <Button size="sm" variant="outline" icon="download" loading={cargandoDoc === `descargar-${a.clave}`} disabled={!!cargandoDoc} onClick={() => abrirDocumento(a, 'descargar')}>Descargar</Button>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+  const postularCard = rol === 'PYME' && (
+    <Card className="apply-card">
+      {miPost ? (
+        <>
+          <CardHeader icon="send" title="Tu postulación" />
+          <div className="apply-state">
+            <Badge tono={tonoEstado(miPost.estado)} dot>{miPost.estado}</Badge>
+            {miPost.adjudicada && <Badge tono="violet" icon="award">¡Adjudicada!</Badge>}
+          </div>
+          <p className="muted-p">Enviada el {fechaCorta(miPost.fecha)}.</p>
+          {miPost.mensaje && <blockquote>“{miPost.mensaje}”</blockquote>}
+          {docsDePostulacion(miPost)}
+          {miPost.estado === 'Pendiente' && <p className="muted-p"><Icon name="clock" size={14} /> Esperando la revisión del Licitador.</p>}
+          {miPost.conversacionId && <Button block icon="chat" variant="teal" onClick={() => navigate(`/app/chat/${miPost.conversacionId}`)}>Abrir chat con el Licitador</Button>}
+        </>
+      ) : abierta ? (
+        <>
+          <CardHeader icon="send" title="Postular a esta licitación" />
+          {sub.data && (
+            <div className="quota">
+              <div><b>{restantes}</b> de {sub.data.plan.postulacionesMes} postulaciones disponibles este mes</div>
+              <Progress valor={sub.data.postulacionesUsadas} max={sub.data.plan.postulacionesMes} tono={restantes === 0 ? 'red' : 'accent'} />
+            </div>
+          )}
+          <RedactarConIA licitacionId={l.id} premium={esPremium(sub.data)} onBorrador={setMensaje} />
+          <Field label="Mensaje para el Licitador" hint="Cuéntale por qué eres la mejor opción."><Textarea rows={5} value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Experiencia similar, plazos, diferenciadores…" /></Field>
+          {pedidos.length > 0 && (
+            <div className="req-subir">
+              <h4>Documentos solicitados</h4>
+              <small>PDF, Word, JPG o PNG · hasta 8 MB cada uno</small>
+              {pedidos.map((r) => {
+                const a = r.id != null ? archivos[r.id] : undefined
+                const falta = r.id != null && faltan.includes(r.id)
+                return (
+                  <div key={r.id} className={`req-item ${falta ? 'falta' : ''}`}>
+                    <div className="req-item-t"><b>{r.nombre}</b><Badge tono={r.obligatorio ? 'amber' : 'gray'}>{r.obligatorio ? 'Obligatorio' : 'Opcional'}</Badge></div>
+                    {a ? (
+                      <div className="req-archivo">
+                        <Icon name="filecheck" size={16} /><span title={a.nombre}>{a.nombre}</span><small>{a.tamanoKb} KB</small>
+                        <button type="button" className="link-btn" onClick={() => { destino.current = r.id!; refArchivo.current?.click() }}>Reemplazar</button>
+                        <button type="button" className="icon-btn" onClick={() => quitarArchivo(r.id!)} aria-label={`Quitar ${a.nombre}`}><Icon name="x" size={15} /></button>
+                      </div>
+                    ) : <Button size="sm" variant="outline" icon="upload" onClick={() => { destino.current = r.id!; refArchivo.current?.click() }}>Subir archivo</Button>}
+                    {falta && <small className="req-err">Este documento es obligatorio.</small>}
+                  </div>
+                )
+              })}
+              <input ref={refArchivo} type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" hidden onChange={(e) => { elegirArchivo(e.target.files?.[0]); e.target.value = '' }} />
+            </div>
+          )}
+          <Button block size="lg" icon="send" loading={enviando} onClick={postular}>Enviar postulación</Button>
+        </>
+      ) : (
+        <EmptyState icon="lock" titulo="Licitación no disponible" texto="Esta licitación ya no recibe postulaciones." />
+      )}
     </Card>
   )
   const postulacionesCard = (esDueno || rol === 'ADMIN') && (
@@ -167,6 +277,7 @@ export function TenderDetail({ id }: { id: number }) {
                 </div>
                 <small>{cat.rubro(p.pymeRubroId)} · {p.pymeTamanoId ? `Empresa ${cat.tamano(p.pymeTamanoId).toLowerCase()} · ` : ''}postuló {hace(p.fecha)}</small>
                 {p.mensaje && <p>“{p.mensaje}”</p>}
+                {docsDePostulacion(p)}
               </div>
               {esDueno && (
                 <div className="applicant-actions">
@@ -223,7 +334,7 @@ export function TenderDetail({ id }: { id: number }) {
     </Modal>
 
     <Modal abierto={!!visor} onClose={() => setVisor(null)} titulo={visor?.doc.nombre ?? 'Documento'} ancho={980}
-      pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button>{visor && <Button icon="download" onClick={() => abrirDocumento(visor.doc, 'descargar')} loading={cargandoDoc === `descargar-${clave(visor.doc)}`}>Descargar</Button>}</>}>
+      pie={<><Button variant="ghost" onClick={() => setVisor(null)}>Cerrar</Button>{visor && <Button icon="download" onClick={() => abrirDocumento(visor.doc, 'descargar')} loading={cargandoDoc === `descargar-${visor.doc.clave}`}>Descargar</Button>}</>}>
       {visor && (visor.mime === 'application/pdf'
         ? <iframe className="doc-visor" src={visor.url} title={visor.doc.nombre} />
         : visor.mime.startsWith('image/')
@@ -273,7 +384,7 @@ export function TenderDetail({ id }: { id: number }) {
         </div>
       </Card>
 
-      <div className="grid-main">
+      {rol === 'PYME' ? <TenderDetailPyme l={l} perfil={sesion!.perfil} documentos={docsLista} postular={postularCard} publicadaPor={publicadaCard} /> : <div className="grid-main">
         <div className="stack">
           <Card>
             <CardHeader icon="file" title="Descripción" />
@@ -287,43 +398,16 @@ export function TenderDetail({ id }: { id: number }) {
         </div>
 
         <div className="stack">
-          {rol === 'PYME' && (
-            <Card className="apply-card">
-              {miPost ? (
-                <>
-                  <CardHeader icon="send" title="Tu postulación" />
-                  <div className="apply-state">
-                    <Badge tono={tonoEstado(miPost.estado)} dot>{miPost.estado}</Badge>
-                    {miPost.adjudicada && <Badge tono="violet" icon="award">¡Adjudicada!</Badge>}
-                  </div>
-                  <p className="muted-p">Enviada el {fechaCorta(miPost.fecha)}.</p>
-                  {miPost.mensaje && <blockquote>“{miPost.mensaje}”</blockquote>}
-                  {miPost.estado === 'Pendiente' && <p className="muted-p"><Icon name="clock" size={14} /> Esperando la revisión del Licitador.</p>}
-                  {miPost.conversacionId && <Button block icon="chat" variant="teal" onClick={() => navigate(`/app/chat/${miPost.conversacionId}`)}>Abrir chat con el Licitador</Button>}
-                </>
-              ) : abierta ? (
-                <>
-                  <CardHeader icon="send" title="Postular a esta licitación" />
-                  {sub.data && (
-                    <div className="quota">
-                      <div><b>{restantes}</b> de {sub.data.plan.postulacionesMes} postulaciones disponibles este mes</div>
-                      <Progress valor={sub.data.postulacionesUsadas} max={sub.data.plan.postulacionesMes} tono={restantes === 0 ? 'red' : 'accent'} />
-                    </div>
-                  )}
-                  <Field label="Mensaje para el Licitador" hint="Cuéntale por qué eres la mejor opción."><Textarea rows={5} value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Experiencia similar, plazos, diferenciadores…" /></Field>
-                  <Button block size="lg" icon="send" loading={enviando} onClick={postular}>Enviar postulación</Button>
-                </>
-              ) : (
-                <EmptyState icon="lock" titulo="Licitación no disponible" texto="Esta licitación ya no recibe postulaciones." />
-              )}
-            </Card>
-          )}
+          {postularCard}
           {gestionCard}
           {publicadaCard}
         </div>
-      </div>
+      </div>}
 
       {modales}
     </div>
   )
 }
+
+/** Documento que se puede ver o descargar desde el detalle: de la licitación o subido por una Pyme. */
+interface Abrible { clave: string; nombre: string; cargar: () => Promise<ArchivoLicitacion> }

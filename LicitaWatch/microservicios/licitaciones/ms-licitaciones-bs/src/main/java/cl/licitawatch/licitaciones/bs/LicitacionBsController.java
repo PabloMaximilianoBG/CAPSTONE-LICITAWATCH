@@ -25,6 +25,7 @@ public class LicitacionBsController {
     @GetMapping("/bs/licitaciones/referencia") public ReferenciaPresupuesto referencia(@RequestParam int rubroId) { return svc.referencia(rubroId); }
     @GetMapping("/bs/licitaciones/todas") public List<LicitacionDto> todas() { return svc.todas(); }
     @GetMapping("/bs/licitaciones/{id}") public LicitacionDto obtener(@PathVariable long id) { return svc.obtener(id); }
+    @GetMapping("/bs/licitadores/{id}/confianza") public ConfianzaLicitador confianza(@PathVariable long id) { return svc.confianza(id); }
     @GetMapping("/bs/licitaciones/{id}/documento") public ArchivoDto documento(@PathVariable long id) { return svc.documento(id, null); }
     @GetMapping("/bs/licitaciones/{id}/documentos/{docId}") public ArchivoDto documento(@PathVariable long id, @PathVariable long docId) { return svc.documento(id, docId); }
     @PostMapping("/bs/licitaciones/{id}/documentos")
@@ -43,7 +44,9 @@ public class LicitacionBsController {
     @GetMapping("/bs/licitaciones/{id}/postulantes")
     public List<PostulacionDto> postulantes(HttpServletRequest r, @PathVariable long id) { Sesion s = Auth.sesion(r); return svc.postulantes(id, s.usuarioId(), s.esAdmin()); }
     @PostMapping("/bs/licitaciones/{id}/postular") @ResponseStatus(HttpStatus.CREATED)
-    public PostulacionDto postular(HttpServletRequest r, @PathVariable long id, @RequestBody Postular b) { return svc.postular(Auth.sesion(r).usuarioId(), id, b.mensaje()); }
+    public PostulacionDto postular(HttpServletRequest r, @PathVariable long id, @RequestBody Postular b) { return svc.postular(Auth.sesion(r).usuarioId(), id, b.mensaje(), b.documentos()); }
+    @GetMapping("/bs/postulaciones/{id}/documentos/{docId}")
+    public ArchivoDto documentoPostulacion(HttpServletRequest r, @PathVariable long id, @PathVariable long docId) { Sesion s = Auth.sesion(r); return svc.documentoPostulacion(id, docId, s.usuarioId(), s.esAdmin()); }
 
     @GetMapping("/bs/resumen/licitador") public ResumenLicitador resumenL(HttpServletRequest r) { return svc.resumenLicitador(Auth.sesion(r).usuarioId()); }
     @GetMapping("/bs/resumen/pyme") public ResumenPyme resumenP(HttpServletRequest r) { return svc.resumenPyme(Auth.sesion(r).usuarioId()); }

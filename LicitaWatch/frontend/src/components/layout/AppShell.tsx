@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext'
 import { Avatar, Badge, Button, Modal } from '../ui/ui'
 import { Logo } from './Logo'
 import { hace } from '../../lib/format'
+import { esPremium } from '../../lib/plan'
 
 interface Item { to: string; label: string; icon: IconName; exact?: boolean; badge?: ReactNode }
 
@@ -118,7 +119,7 @@ function AvisoRubro({ usuarioId, pendientes }: { usuarioId: number; pendientes: 
   const firma = nuevos.join(',')
   useEffect(() => {
     if (!nuevos.length || aviso) return
-    api.miSuscripcion().then((s) => s.plan.nombre === 'Premium').catch(() => false).then((premium) => setAviso({ ids: nuevos, premium }))
+    api.miSuscripcion().then(esPremium).catch(() => false).then((premium) => setAviso({ ids: nuevos, premium }))
   }, [firma]) // eslint-disable-line
   if (!aviso) return null
   const cerrar = () => {
@@ -166,7 +167,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('mousedown', h)
   }, [])
   useEffect(() => {
-    if (sesion?.usuario.rol === 'PYME') api.miSuscripcion().then((s) => setPremium(s.plan.nombre === 'Premium')).catch(() => undefined)
+    if (sesion?.usuario.rol === 'PYME') api.miSuscripcion().then((s) => setPremium(esPremium(s))).catch(() => undefined)
   }, [sesion?.usuario.rol, path])
 
   if (!sesion) return null

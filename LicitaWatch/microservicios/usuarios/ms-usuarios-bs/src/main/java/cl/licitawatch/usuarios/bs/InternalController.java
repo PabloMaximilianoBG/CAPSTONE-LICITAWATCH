@@ -30,6 +30,7 @@ public class InternalController {
         m.put("nombre", perfil != null ? perfil.nombreVisible() : u.email()); m.put("rubroId", p != null ? p.rubroId() : null);
         m.put("tamanoEmpresaId", p != null ? p.tamanoEmpresaId() : null); m.put("ciudadId", p != null ? p.ciudadId() : null); m.put("emailContacto", p != null ? p.emailContacto() : u.email());
         m.put("rut", p != null ? Rut.formatear(p.rut()) : null); m.put("nombreContacto", p != null ? p.nombreContacto() : null);   // p. ej. para el chat
+        m.put("createdAt", u.createdAt() == null ? null : u.createdAt().toString()); m.put("descripcionEmpresa", p != null ? p.descripcionEmpresa() : null);   // confianza del licitador y borrador de LicitAsist
         return m;
     }
 

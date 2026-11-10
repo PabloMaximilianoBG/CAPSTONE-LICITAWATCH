@@ -1,3 +1,4 @@
+import type { TipoArchivo } from '../api/types'
 const CLP = new Intl.NumberFormat('es-CL', {
   style: 'currency',
   currency: 'CLP',
@@ -60,11 +61,13 @@ export const iniciales = (nombre: string): string =>
 
 export const mesCorto = (d: Date): string => MESES[d.getMonth()]
 
-export const tipoArchivo = (nombre: string): 'PDF' | 'DOCX' | 'XLSX' | 'Otro' => {
+export const tipoArchivo = (nombre: string): TipoArchivo => {
   const ext = nombre.split('.').pop()?.toLowerCase()
   if (ext === 'pdf') return 'PDF'
   if (ext === 'doc' || ext === 'docx') return 'DOCX'
   if (ext === 'xls' || ext === 'xlsx') return 'XLSX'
+  if (ext === 'jpg' || ext === 'jpeg') return 'JPG'
+  if (ext === 'png') return 'PNG'
   return 'Otro'
 }
 

@@ -65,6 +65,26 @@ CREATE TABLE IF NOT EXISTS documento_licitacion (         -- 1 licitación -> N 
 );
 CREATE INDEX IF NOT EXISTS ix_doc_lic ON documento_licitacion(licitacion_id);
 
+CREATE TABLE IF NOT EXISTS licitacion_documento_requerido (   -- 1 licitación -> N documentos que el Licitador pide a las Pymes
+  id             BIGSERIAL PRIMARY KEY,
+  licitacion_id  BIGINT  NOT NULL REFERENCES licitacion(id) ON DELETE CASCADE,
+  nombre         VARCHAR(160) NOT NULL,                   -- p. ej. «Certificado F30», «Referencias de obras»
+  obligatorio    BOOLEAN NOT NULL DEFAULT TRUE            -- FALSE = la Pyme puede postular sin subirlo
+);
+CREATE INDEX IF NOT EXISTS ix_doc_req_lic ON licitacion_documento_requerido(licitacion_id);
+
+CREATE TABLE IF NOT EXISTS postulacion_documento (        -- 1 postulación -> N documentos que subió la Pyme
+  id               BIGSERIAL PRIMARY KEY,
+  postulacion_id   BIGINT  NOT NULL REFERENCES postulacion(id) ON DELETE CASCADE,
+  requisito_id     BIGINT  REFERENCES licitacion_documento_requerido(id) ON DELETE SET NULL,  -- documento pedido al que responde
+  nombre_archivo   VARCHAR(255) NOT NULL,                 -- nombre original del archivo
+  archivo_url      TEXT    NOT NULL,                      -- contenido del archivo (data URL base64), como documento_licitacion
+  tipo_archivo_id  INTEGER REFERENCES tipo_archivo(id),
+  fecha_subida     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_post_doc_req UNIQUE (postulacion_id, requisito_id)
+);
+CREATE INDEX IF NOT EXISTS ix_post_doc_post ON postulacion_documento(postulacion_id);
+
 INSERT INTO estado_licitacion  (nombre) VALUES ('Abierta'), ('Cerrada'), ('Adjudicada') ON CONFLICT DO NOTHING;
 INSERT INTO estado_postulacion (nombre) VALUES ('Pendiente'), ('Aprobada'), ('Rechazada') ON CONFLICT DO NOTHING;
-INSERT INTO tipo_archivo       (nombre) VALUES ('PDF'), ('DOCX'), ('XLSX'), ('Otro') ON CONFLICT DO NOTHING;
+INSERT INTO tipo_archivo       (nombre) VALUES ('PDF'), ('DOCX'), ('XLSX'), ('JPG'), ('PNG'), ('Otro') ON CONFLICT DO NOTHING;
