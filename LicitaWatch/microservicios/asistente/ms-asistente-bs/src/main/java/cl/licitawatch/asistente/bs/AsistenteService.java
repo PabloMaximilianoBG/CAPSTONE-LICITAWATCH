@@ -14,15 +14,24 @@ import java.util.*;
 @Service
 public class AsistenteService {
     public record Respuesta(String rol, String texto, List<JsonNode> licitaciones) {}
-    private final InternalClient interno; private final GroqClient groq; private final String urlVentas, urlLicitaciones;
+    /** Borrador del mensaje de postulación; ia = false si Groq no respondió y se usó la plantilla local. */
+    public record Borrador(String texto, boolean ia) {}
+    private final InternalClient interno; private final GroqClient groq; private final String urlVentas, urlLicitaciones, urlUsuarios;
 
-    public AsistenteService(InternalClient interno, GroqClient groq, @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.urls.licitaciones}") String urlLicitaciones) {
-        this.interno = interno; this.groq = groq; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones;
+    public AsistenteService(InternalClient interno, GroqClient groq, @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.urls.licitaciones}") String urlLicitaciones,
+                            @Value("${lw.urls.usuarios}") String urlUsuarios) {
+        this.interno = interno; this.groq = groq; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones; this.urlUsuarios = urlUsuarios;
+    }
+
+    /** Suscripción de la Pyme; si no es Premium responde 403 con el mensaje indicado. */
+    private JsonNode exigirPremium(long pymeId, String mensaje) {
+        JsonNode sus = interno.get(urlVentas + "/internal/suscripciones/" + pymeId, JsonNode.class);
+        if (!"Premium".equals(sus.path("plan").path("nombre").asText())) throw ApiException.prohibido(mensaje);
+        return sus;
     }
 
     public Respuesta preguntar(long pymeId, String texto) {
-        JsonNode sus = interno.get(urlVentas + "/internal/suscripciones/" + pymeId, JsonNode.class);
-        if (!"Premium".equals(sus.path("plan").path("nombre").asText())) throw ApiException.prohibido("LicitAsist es una función del plan Premium");
+        JsonNode sus = exigirPremium(pymeId, "LicitAsist es una función del plan Premium");
         if (texto == null || texto.isBlank()) throw ApiException.invalido("Escribe tu consulta");
 
         String q = norm(texto);
@@ -77,6 +86,50 @@ public class AsistenteService {
         String respuesta = groq.responder(sistema, "Contexto de la Pyme:\n" + ctx + "\nConsulta de la Pyme: " + texto)
                 .map(t -> t.replace("**", "").replaceAll("(?m)^#+\\s*", "").replaceAll("(?m)[ \\t]+$", "")).orElse(base);
         return new Respuesta("asistente", respuesta, top);
+    }
+
+    /**
+     * Redacta un borrador del mensaje de postulación con el perfil de la Pyme y la licitación (leídos aquí, no desde el navegador).
+     * La Pyme lo revisa y edita antes de enviarlo; sin Groq se arma con una plantilla.
+     */
+    public Borrador redactarPostulacion(long pymeId, long licitacionId) {
+        exigirPremium(pymeId, "Redactar con IA es un beneficio Premium. Mejora tu plan para usarlo");
+        JsonNode l = interno.get(urlLicitaciones + "/bs/licitaciones/" + licitacionId, JsonNode.class);
+        if (!"Abierta".equals(l.path("estado").asText())) throw ApiException.invalido("Esta licitación ya no recibe postulaciones");
+        JsonNode p = interno.get(urlUsuarios + "/internal/usuarios/" + pymeId + "/resumen", JsonNode.class);
+        String empresa = p.path("nombre").asText("nuestra empresa");
+        String rubro = nombreCatalogo("rubros", p.path("rubroId").asInt(0)), tamano = nombreCatalogo("tamanos", p.path("tamanoEmpresaId").asInt(0));
+        String descripcion = p.path("descripcionEmpresa").asText("");
+
+        String ctx = "Empresa: " + empresa + "\nRubro: " + (rubro.isEmpty() ? "no indicado" : rubro) + "\nTamaño: " + (tamano.isEmpty() ? "no indicado" : tamano)
+                + "\nDescripción de la empresa: " + (descripcion.isBlank() ? "no indicada" : corto(descripcion, 600))
+                + "\n\nLicitación: " + l.path("titulo").asText() + " (de " + l.path("licitadorNombre").asText() + ")"
+                + (l.path("duracionMeses").isNull() ? "" : "\nDuración del contrato: " + l.path("duracionMeses").asText() + " meses")
+                + "\nDescripción, alcance y requisitos:\n" + corto(l.path("descripcion").asText(), 2500);
+        String sistema = """
+                Eres LicitAsist, el asistente de LicitaWatch. Redacta el mensaje de postulación que una Pyme enviará al Licitador.
+                Usa SOLO los datos del contexto: no inventes certificaciones, años de experiencia, clientes, precios ni plazos.
+                Si falta un dato que convendría incluir, deja un marcador entre corchetes, por ejemplo [años de experiencia].
+                Estructura: saludo breve, por qué la empresa calza con el alcance, cómo cumple cada requisito, y un cierre cordial.
+                Español de Chile, tono profesional y cercano, en primera persona plural, entre 120 y 200 palabras,
+                texto plano sin Markdown (sin asteriscos ni #). Responde solo con el mensaje, sin títulos ni explicaciones.""";
+        Optional<String> ia = groq.responder(sistema, ctx).map(t -> t.replace("**", "").replaceAll("(?m)^#+\\s*", "").trim());
+        if (ia.isPresent()) return new Borrador(ia.get(), true);
+        String plantilla = "Estimados " + l.path("licitadorNombre").asText() + ":\n\n"
+                + "En " + empresa + (rubro.isEmpty() ? "" : ", empresa del rubro " + rubro.toLowerCase()) + ", nos interesa postular a «" + l.path("titulo").asText() + "».\n\n"
+                + (descripcion.isBlank() ? "[Cuéntale brevemente a qué se dedica tu empresa]" : descripcion.trim()) + "\n\n"
+                + "Cumplimos con los requisitos solicitados: [detalla cómo cumples cada requisito y tu experiencia en trabajos similares].\n\n"
+                + "Quedamos atentos para ampliar la información o coordinar una reunión.\n\nSaludos cordiales,\n" + empresa;
+        return new Borrador(plantilla, false);
+    }
+
+    /** Nombre de un rubro o tamaño desde el catálogo de Usuarios; vacío si no se encuentra. */
+    private String nombreCatalogo(String catalogo, int id) {
+        if (id == 0) return "";
+        try {
+            for (JsonNode c : interno.get(urlUsuarios + "/bs/catalogos/" + catalogo, JsonNode.class)) if (c.path("id").asInt() == id) return c.path("nombre").asText();
+        } catch (Exception ignorada) { /* sin el nombre, el borrador igual se arma */ }
+        return "";
     }
 
     private static String corto(String s, int max) { return s == null ? "" : s.length() <= max ? s : s.substring(0, max) + "…"; }

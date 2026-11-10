@@ -36,6 +36,7 @@ psql -U postgres -d licitawatch_usuarios -f db/migracion_terminos_legales.sql # 
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_postulacion_archivada.sql  # la Pyme archiva postulaciones (postulacion.archivada)
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_documentos_licitacion.sql  # varios documentos por licitación (tabla documento_licitacion)
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_duracion_licitacion.sql    # duración del contrato en meses (licitacion.duracion_meses)
+psql -U postgres -d licitawatch_licitaciones -f db/migracion_documentos_postulacion.sql # documentos que pide el Licitador y que sube la Pyme al postular
 psql -U postgres -d licitawatch_ventas   -f db/migracion_precio_planes.sql     # precio de los planes editable por el admin (plan_suscripcion.precio_mensual, plan_precio_historial)
 psql -U postgres -d licitawatch_chat     -f db/migracion_chat_eliminar.sql     # eliminar conversación solo para mí (conversacion.borrada_*_at)
 psql -U postgres -d licitawatch_notificaciones -f db/migracion_tipo_licitacion_rubro.sql  # tipo de notificación «Licitación de tu rubro»

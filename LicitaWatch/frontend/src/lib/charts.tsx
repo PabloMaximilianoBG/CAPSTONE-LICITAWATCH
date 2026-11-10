@@ -132,7 +132,7 @@ export interface Segmento {
   color: string
 }
 
-export function Donut({ segmentos, centro, subtitulo }: { segmentos: Segmento[]; centro: string; subtitulo?: string }) {
+export function Donut({ segmentos, centro, subtitulo, leyenda = true }: { segmentos: Segmento[]; centro: string; subtitulo?: string; leyenda?: boolean }) {
   const total = segmentos.reduce((s, x) => s + x.valor, 0) || 1
   const R = 52
   const C = 2 * Math.PI * R
@@ -170,7 +170,7 @@ export function Donut({ segmentos, centro, subtitulo }: { segmentos: Segmento[];
           </text>
         )}
       </svg>
-      <ul className="donut-legend">
+      {leyenda && <ul className="donut-legend">
         {segmentos.map((s) => (
           <li key={s.etiqueta}>
             <span className="dot" style={{ background: s.color }} />
@@ -178,7 +178,7 @@ export function Donut({ segmentos, centro, subtitulo }: { segmentos: Segmento[];
             <b>{s.valor}</b>
           </li>
         ))}
-      </ul>
+      </ul>}
     </div>
   )
 }

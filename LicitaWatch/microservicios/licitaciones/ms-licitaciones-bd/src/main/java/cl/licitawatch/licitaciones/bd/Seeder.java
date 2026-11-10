@@ -16,6 +16,6 @@ public class Seeder implements CommandLineRunner {
     @Override public void run(String... args) {
         for (String n : List.of("Abierta", "Cerrada", "Adjudicada")) if (el.findByNombre(n).isEmpty()) el.save(new EstadoLicitacion(n));
         for (String n : List.of("Pendiente", "Aprobada", "Rechazada")) if (ep.findByNombre(n).isEmpty()) ep.save(new EstadoPostulacion(n));
-        for (String n : List.of("PDF", "DOCX", "XLSX", "Otro")) if (ta.findByNombre(n).isEmpty()) ta.save(new TipoArchivo(n));
+        for (String n : List.of("PDF", "DOCX", "XLSX", "JPG", "PNG", "Otro")) if (ta.findByNombre(n).isEmpty()) ta.save(new TipoArchivo(n));
     }
 }

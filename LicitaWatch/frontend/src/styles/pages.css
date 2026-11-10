@@ -189,3 +189,42 @@ td.row-actions { display: table-cell; text-align: right; white-space: nowrap; } 
 .applicant.resaltada { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 @media (max-width: 1100px) { .pan-grid { grid-template-columns: minmax(0, 1fr); } .pan-span-2, .pan-span-3 { grid-column: auto; } }
 @media (max-width: 640px) { .pan-datos { grid-template-columns: 1fr 1fr; } .pan-req-docs { grid-template-columns: minmax(0, 1fr); } .pan-radar { flex-direction: column; align-items: center; } .pan-radar-datos { width: 100%; } }
+
+/* ---------- Detalle de licitación para la Pyme (TenderDetailPyme) ---------- */
+.tdp .apply-card { position: static; }   /* con más tarjetas debajo, la tarjeta fija se montaría sobre ellas */
+.tdp-sub { margin: 16px 0 8px; font-size: 14px; }
+.tdp-compat { display: flex; align-items: center; gap: 16px; } .tdp-compat .donut { flex: none; } .tdp-compat .donut svg { width: 112px; height: 112px; }
+.tdp-chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.tdp-ia { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; } .tdp-ia p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.tdp-ia p.err { color: var(--red); } .tdp-ia.bloqueado p { padding: 8px 10px; border-radius: var(--r-sm); background: var(--amber-soft); color: #92400e; }
+.tdp-ia.bloqueado a { color: inherit; font-weight: 700; text-decoration: underline; }
+.tdp-confianza { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.tdp-confianza div { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 12px; background: var(--surface-2); min-width: 0; }
+.tdp-confianza b { font-size: 15px; overflow-wrap: anywhere; } .tdp-confianza span { font-size: 11.5px; color: var(--muted); }
+.tdp-mapa { display: flex; align-items: center; gap: 24px; }
+.tdp-leyenda { display: flex; flex-direction: column; gap: 12px; } .tdp-leyenda li { display: flex; gap: 10px; align-items: flex-start; }
+.tdp-leyenda div { display: flex; flex-direction: column; } .tdp-leyenda small { color: var(--muted); font-size: 12.5px; }
+.tdp-leyenda .sw { flex: none; width: 14px; height: 14px; margin-top: 3px; border-radius: 4px; } .tdp-leyenda .sw.sel { background: var(--accent); }
+.tdp-leyenda .sw.mk { border-radius: 50%; background: #fff; border: 3px solid var(--violet); }
+.chile-map .marcador { fill: #fff; stroke: var(--violet); stroke-width: 1.4; }
+.tdp-similares-t { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; } .tdp-similares-t h3 { margin: 0; font-size: 18px; }
+@media (max-width: 640px) { .tdp-compat, .tdp-mapa { flex-direction: column; align-items: center; } .tdp-confianza { grid-template-columns: 1fr; } }
+
+/* ---------- Documentos que el Licitador pide y que sube la Pyme ---------- */
+.req-sugerencias { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.req-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); font-size: 13px; color: var(--text); cursor: pointer; text-align: left; }
+.req-chip:hover { border-color: var(--accent); } .req-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.req-lista { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.req-lista li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; }
+.req-lista li > svg { flex: none; color: var(--accent); } .req-lista li > span { flex: 1; min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.req-oblig { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; } .req-oblig input { accent-color: var(--accent); }
+.req-otro { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; } .req-otro > :first-child { flex: 1; min-width: 0; }
+.req-subir { display: flex; flex-direction: column; gap: 10px; } .req-subir h4 { margin: 0; font-size: 14px; } .req-subir > small { color: var(--muted); font-size: 12.5px; margin-top: -6px; }
+.req-item { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.req-item.falta { border-color: var(--red); background: var(--red-soft); }
+.req-item-t { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .req-item-t b { font-size: 13.5px; }
+.req-archivo { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 13px; } .req-archivo svg { flex: none; color: var(--green); }
+.req-archivo span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .req-archivo small { color: var(--muted); }
+.req-err { color: var(--red); font-size: 12.5px; }
+.doc-list-post { margin-top: 8px; }
+@media (max-width: 640px) { .req-lista li { flex-wrap: wrap; } .req-otro { flex-direction: column; align-items: stretch; } }

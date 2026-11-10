@@ -166,7 +166,12 @@ function Presupuesto({ min, max }: { min?: number; max?: number }) {
   )
 }
 
-function LineaDeTiempo({ l, total, dias, abierta }: { l: Licitacion; total: number; dias: number; abierta: boolean }) {
+/** Textos del paso «Adjudicación» según quién mira (por defecto, el Licitador dueño). */
+const ADJ_LICITADOR = { hecha: 'Adjudicada: ya se abrió el chat con la Pyme', pendiente: 'Apruebas a la Pyme elegida y se abre el chat' }
+
+export function LineaDeTiempo({ l, total, dias, abierta, adjudicacion = ADJ_LICITADOR }: {
+  l: Licitacion; total: number; dias: number; abierta: boolean; adjudicacion?: { hecha: string; pendiente: string }
+}) {
   const adjudicada = l.estado === 'Adjudicada'
   const cerrada = !abierta   // cerrada a mano, adjudicada o pasada la fecha de cierre (el backend ya la entrega como «Cerrada»)
   const tono: Tono = dias > 3 ? 'green' : dias >= 1 ? 'amber' : 'red'
@@ -176,12 +181,12 @@ function LineaDeTiempo({ l, total, dias, abierta }: { l: Licitacion; total: numb
     { t: 'Recibiendo postulaciones', d: abierta ? `${total} recibida${total === 1 ? '' : 's'} · cierra ${dias === 0 ? 'hoy' : `en ${dias} día${dias === 1 ? '' : 's'}`}` : `${total} recibida${total === 1 ? '' : 's'}`, e: abierta ? 'actual' : 'hecho' },
     { t: 'Cierre', d: fechaCorta(l.fechaCierre), e: cerrada ? 'hecho' : 'pendiente' },
     // Aprobar una postulación adjudica la licitación y solo se puede mientras está abierta (regla del backend).
-    { t: 'Adjudicación', d: adjudicada ? 'Adjudicada: ya se abrió el chat con la Pyme' : cerrada ? 'Cerró sin adjudicar' : 'Apruebas a la Pyme elegida y se abre el chat', e: adjudicada ? 'hecho' : 'pendiente' },
+    { t: 'Adjudicación', d: adjudicada ? adjudicacion.hecha : cerrada ? 'Cerró sin adjudicar' : adjudicacion.pendiente, e: adjudicada ? 'hecho' : 'pendiente' },
   ]
   return (
     <Card className="pan-alto">
       <CardHeader icon="clock" title="Línea de tiempo"
-        action={abierta ? <Badge tono={tono}>{dias < 1 ? 'Cierra hoy' : `Quedan ${dias} día${dias === 1 ? '' : 's'}`}</Badge> : <Badge tono={tonoEstado(l.estado)}>{l.estado === 'Abierta' ? 'Cerrada' : l.estado}</Badge>} />
+        action={abierta ? <Badge tono={tono}>{dias < 1 ? 'Cierra hoy' : `Cierra en ${dias} día${dias === 1 ? '' : 's'}`}</Badge> : <Badge tono={tonoEstado(l.estado)}>{l.estado === 'Abierta' ? 'Cerrada' : l.estado}</Badge>} />
       <ol className="pan-linea">
         {pasos.map((p) => (
           <li key={p.t} className={p.e}>

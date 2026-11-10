@@ -1,5 +1,6 @@
-import type { AlcancePymes, Licitacion, ReferenciaPresupuesto } from '../../api/types'
-import { Card, Progress } from '../../components/ui/ui'
+import { useState } from 'react'
+import { MAX_REQUERIDOS, type AlcancePymes, type DocumentoRequerido, type Licitacion, type ReferenciaPresupuesto } from '../../api/types'
+import { Button, Card, CardHeader, Input, Progress, useToast } from '../../components/ui/ui'
 import { TenderCard } from '../../components/app/shared'
 import { Icon } from '../../lib/icons'
 import { clp, duracionTexto, fechaCorta } from '../../lib/format'
@@ -137,5 +138,74 @@ export function PanelPublicar({ vista, datos, alcance, rubro, region, cierre }: 
       <Alcance alcance={alcance} rubro={rubro} region={region} />
       <Cronograma cierre={cierre} duracionMeses={vista.duracionMeses} />
     </aside>
+  )
+}
+
+/** Documentos que se suelen pedir a las Pymes, por rubro; después se ofrecen los generales. */
+const DOCS_POR_RUBRO: Record<string, string[]> = {
+  'Construcción': ['Inscripción en registro de contratistas', 'Referencias de obras similares', 'Póliza de responsabilidad civil'],
+  'Tecnología': ['Portafolio de proyectos similares', 'CV del equipo propuesto'],
+  'Salud': ['Registro ISP de los productos', 'Certificados de calidad y fichas técnicas'],
+  'Minería': ['Acreditación para ingresar a faena', 'Plan de seguridad y prevención de riesgos'],
+  'Logística y Transporte': ['Póliza de seguro de carga', 'Permisos de circulación de la flota'],
+  'Alimentos y Casino': ['Resolución sanitaria vigente', 'Minutas de ejemplo con valor nutricional'],
+  'Energía': ['Licencia de instalador SEC', 'Referencias de proyectos similares'],
+  'Mantención Industrial': ['Certificaciones de los técnicos', 'Pauta de mantención propuesta'],
+  'Aseo y Mantención': ['Dotación y turnos propuestos', 'Ficha técnica de insumos y maquinaria'],
+  'Seguridad': ['Autorización OS-10 vigente', 'Cursos OS-10 de los guardias'],
+}
+const DOCS_GENERALES = ['Certificado F30 (antecedentes laborales y previsionales)', 'Certificado de vigencia de la sociedad', 'Carpeta tributaria']
+
+/**
+ * «Documentos que solicitas a las Pymes»: sugerencias por rubro que se marcan o quitan, documentos propios
+ * y obligatorio u opcional para cada uno. Lista vacía = no se pide nada.
+ */
+export function DocumentosSolicitados({ rubro, valor, onChange }: { rubro: string; valor: DocumentoRequerido[]; onChange: (v: DocumentoRequerido[]) => void }) {
+  const toast = useToast()
+  const [otro, setOtro] = useState('')
+  const sugerencias = [...(DOCS_POR_RUBRO[rubro] ?? []), ...DOCS_GENERALES]
+  const esta = (n: string) => valor.some((r) => r.nombre.toLowerCase() === n.trim().toLowerCase())
+  const agregar = (nombre: string) => {
+    const n = nombre.trim()
+    if (n.length < 3) { toast.error('Escribe el nombre del documento (mínimo 3 caracteres).'); return false }
+    if (esta(n)) { toast.error('Ese documento ya está en la lista.'); return false }
+    if (valor.length >= MAX_REQUERIDOS) { toast.error(`Puedes pedir hasta ${MAX_REQUERIDOS} documentos.`); return false }
+    onChange([...valor, { nombre: n, obligatorio: true }])
+    return true
+  }
+  const alternar = (n: string) => esta(n) ? onChange(valor.filter((r) => r.nombre.toLowerCase() !== n.toLowerCase())) : agregar(n)
+  return (
+    <Card>
+      <CardHeader icon="filecheck" title="Documentos que solicitas a las Pymes" subtitle="Opcional · si no marcas ninguno, las Pymes postulan solo con su mensaje." />
+      <p className="pub-nota">Sugerencias{rubro ? ` para ${rubro}` : ''} (toca para agregar o quitar):</p>
+      <div className="req-sugerencias">
+        {sugerencias.map((n) => (
+          <button key={n} type="button" className={`req-chip ${esta(n) ? 'on' : ''}`} onClick={() => alternar(n)} aria-pressed={esta(n)}>
+            <Icon name={esta(n) ? 'check' : 'plus'} size={13} />{n}
+          </button>
+        ))}
+      </div>
+      {valor.length > 0 && (
+        <ul className="req-lista">
+          {valor.map((r, i) => (
+            <li key={r.nombre}>
+              <Icon name="file" size={16} />
+              <span>{r.nombre}</span>
+              <label className="req-oblig">
+                <input type="checkbox" checked={r.obligatorio} onChange={(e) => onChange(valor.map((x, k) => (k === i ? { ...x, obligatorio: e.target.checked } : x)))} />
+                {r.obligatorio ? 'Obligatorio' : 'Opcional'}
+              </label>
+              <button type="button" className="icon-btn" onClick={() => onChange(valor.filter((_, k) => k !== i))} aria-label={`Quitar ${r.nombre}`}><Icon name="x" size={15} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="req-otro">
+        <Input value={otro} maxLength={160} placeholder="Otro documento, p. ej. Boleta de garantía de seriedad de la oferta" onChange={(e) => setOtro(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (agregar(otro)) setOtro('') } }} />
+        <Button size="sm" variant="soft" icon="plus" onClick={() => { if (agregar(otro)) setOtro('') }}>Agregar</Button>
+      </div>
+      <p className="pub-nota">{valor.length} de {MAX_REQUERIDOS} documentos. Las Pymes podrán subir PDF, Word, JPG o PNG (hasta 8 MB cada uno).</p>
+    </Card>
   )
 }

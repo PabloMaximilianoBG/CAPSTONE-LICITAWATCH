@@ -1,5 +1,5 @@
 import type {
-  Conversacion, DocumentoLicitacion, EstadoLicitacion, EstadoPostulacion, Mensaje, MetodoPago,
+  Conversacion, DocumentoLicitacion, DocumentoPostulacion, DocumentoRequerido, EstadoLicitacion, EstadoPostulacion, Mensaje, MetodoPago,
   Notificacion, Perfil, Plan, Suscripcion, TipoNotificacion, Usuario, Venta,
 } from '../types'
 import { calcularDv, formatearRut } from '../../lib/rut'
@@ -10,10 +10,13 @@ export interface LicitacionDB {
   id: number; licitadorId: number; titulo: string; descripcion: string; rubroId: number; regionId: number
   presupuestoMin?: number; presupuestoMax?: number; maxPostulantes?: number; duracionMeses?: number; imagenUrl?: string
   documentos: DocumentoLicitacion[]; fechaCierre: string; estado: EstadoLicitacion; createdAt: string; pymeAdjudicadaId?: number
+  documentosRequeridos?: DocumentoRequerido[]
 }
 export interface PostulacionDB {
   id: number; licitacionId: number; pymeId: number; mensaje?: string; fecha: string
   estado: EstadoPostulacion; adjudicada: boolean; updatedAt: string; archivada?: boolean
+  /** Archivos que subió la Pyme (contenido = data URL; no viaja en las listas). */
+  documentos?: (Omit<DocumentoPostulacion, 'requisitoNombre'> & { contenido?: string })[]
 }
 export interface NotificacionDB extends Notificacion { usuarioId: number }
 export interface SuscripcionDB extends Omit<Suscripcion, 'plan' | 'postulacionesUsadas'> { planId: number }
@@ -80,6 +83,9 @@ export function resetDb() {
   cache = seed()
   saveDb()
 }
+
+/** PDF de una página para los documentos de ejemplo (así se pueden ver y descargar en el modo simulado). */
+export const PDF_EJEMPLO = 'data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA1OTUgODQyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCAxMjUgPj4Kc3RyZWFtCkJUIC9GMSAxOCBUZiA2MCA3NjAgVGQgKERvY3VtZW50byBkZSBlamVtcGxvIC0gTGljaXRhV2F0Y2gpIFRqIDAgLTI4IFRkIC9GMSAxMiBUZiAoQXJjaGl2byBzaW11bGFkbyBwYXJhIGVsIG1vZG8gZGVtby4pIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwNDE3IDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNDg3CiUlRU9GCg=='
 
 export function nextId(db: DB, tabla: string): number {
   db.seq[tabla] = (db.seq[tabla] ?? 0) + 1
@@ -168,7 +174,7 @@ function seed(): DB {
       nombreContacto: p[5], emailContacto: p[0], telefono: `+56 9 ${6100 + i * 97} ${2000 + i * 211}`,
       rubroId: rubroPorNombre(p[3]), ciudadId: ciudadPorNombre(p[4]), tamanoEmpresaId: (i % 3) + 1,
       descripcionEmpresa: `${p[1]} entrega servicios de ${p[3].toLowerCase()} con foco en calidad y cumplimiento de plazos.`,
-      sitioWeb: undefined, giro: 'Servicios a empresas', siiValidado: true, updatedAt: iso(now - i * DAY),
+      sitioWeb: i === 1 ? 'https://www.ingenieriaatacama.cl' : undefined, giro: 'Servicios a empresas', siiValidado: true, updatedAt: iso(now - i * DAY),
     })
   })
 
@@ -231,8 +237,13 @@ function seed(): DB {
     ['Ampliación de red de fibra óptica en parque industrial', 'Telecomunicaciones', 'Los Lagos', 'Tendido de 6 km de fibra óptica con canalización subterránea, mufas y certificación de enlaces.', 28000000, 42000000, 3],
     ['Mantención de áreas verdes y paisajismo', 'Aseo y Mantención', 'Valparaíso', 'Mantención mensual de 2,5 hectáreas de áreas verdes, poda, riego tecnificado y reposición de especies.', 1800000, 2900000, 4],
     ['Producción de evento corporativo de aniversario', 'Turismo y Eventos', 'Metropolitana de Santiago', 'Producción integral de evento para 400 invitados: locación, montaje, catering, audiovisual y animación.', 14000000, 22000000, 3],
+    // Ejemplos para «Licitaciones similares» y «Compatibilidad contigo» de las Pymes demo (Tecnología en Santiago y Construcción en Copiapó).
+    ['Mesa de ayuda TI y soporte en terreno para 150 usuarios', 'Tecnología', 'Metropolitana de Santiago', 'Soporte de primer y segundo nivel, inventario de equipos y atención en terreno en oficinas de Santiago, con reportes mensuales de niveles de servicio.', 2500000, 4200000, 4],
+    ['Migración de servidores a la nube y respaldo', 'Tecnología', 'Metropolitana de Santiago', 'Migración de 12 servidores a la nube, configuración de respaldos automáticos y capacitación al equipo interno.', 6000000, 9500000, 3],
+    ['Reparación de techumbre y cierre perimetral en bodega', 'Construcción', 'Atacama', 'Cambio de 800 m² de cubierta, canaletas y bajadas de aguas lluvia, más 220 metros de cierre perimetral con portón de acceso.', 9000000, 16000000, 4],
+    ['Construcción de oficinas modulares en faena', 'Construcción', 'Atacama', 'Fundaciones, montaje e instalaciones eléctricas y sanitarias de 6 oficinas modulares para faena minera en Copiapó.', 18000000, 26000000, 3],
   ]
-  const estados: EstadoLicitacion[] = ['Abierta', 'Abierta', 'Abierta', 'Abierta', 'Adjudicada', 'Abierta', 'Abierta', 'Abierta', 'Cerrada', 'Abierta', 'Abierta', 'Adjudicada', 'Abierta', 'Abierta', 'Cerrada', 'Abierta', 'Abierta', 'Abierta']
+  const estados: EstadoLicitacion[] = ['Abierta', 'Abierta', 'Abierta', 'Abierta', 'Adjudicada', 'Abierta', 'Abierta', 'Abierta', 'Cerrada', 'Abierta', 'Abierta', 'Adjudicada', 'Abierta', 'Abierta', 'Cerrada', 'Abierta', 'Abierta', 'Abierta', 'Abierta', 'Abierta', 'Abierta', 'Abierta']
   const regionPorNombre = (n: string) => REGIONES.find((x) => x.nombre === n)?.id ?? 1
   plantillas.forEach((p, i) => {
     const estado = estados[i]
@@ -279,10 +290,25 @@ function seed(): DB {
   const porNombre = (n: string) => db.perfiles.find((p) => p.razonSocial === n)!.usuarioId
   const hoy0 = new Date(); hoy0.setHours(10, 0, 0, 0)
   const ejemplo: [string, number, EstadoPostulacion][] = [['Constructora Pehuén SpA', 0, 'Pendiente'], ['Obras Civiles Maipú Ltda.', 1, 'Rechazada'], ['Ingeniería Atacama Ltda.', 2, 'Pendiente']]
+  // Documentos que pide la bodega y que subieron sus postulantes (un PDF de ejemplo para poder verlos y descargarlos).
+  bodega.documentosRequeridos = [
+    { id: nextId(db, 'requerido'), nombre: 'Certificado F30 (antecedentes laborales y previsionales)', obligatorio: true },
+    { id: nextId(db, 'requerido'), nombre: 'Referencias de obras similares', obligatorio: true },
+    { id: nextId(db, 'requerido'), nombre: 'Inscripción en registro de contratistas', obligatorio: false },
+  ]
   ejemplo.forEach(([n, dias, estado], k) => {
     const fecha = iso(hoy0.getTime() - dias * DAY)
-    db.postulaciones.push({ id: nextId(db, 'postulacion'), licitacionId: bodega.id, pymeId: porNombre(n), mensaje: mensajesTipo[k], fecha, estado, adjudicada: false, updatedAt: fecha })
+    const documentos = bodega.documentosRequeridos!.slice(0, k === 2 ? 3 : 2).map((r) => ({
+      id: nextId(db, 'documentoPostulacion'), requisitoId: r.id, nombre: `${r.nombre.split(' (')[0].replace(/ /g, '_')}.pdf`, tipo: 'PDF' as const, tamanoKb: 1, fechaSubida: fecha, contenido: PDF_EJEMPLO,
+    }))
+    db.postulaciones.push({ id: nextId(db, 'postulacion'), licitacionId: bodega.id, pymeId: porNombre(n), mensaje: mensajesTipo[k], fecha, estado, adjudicada: false, updatedAt: fecha, documentos })
   })
+  // Otra licitación abierta que pide documentos, para postular con premium@demo.cl (Construcción en Atacama).
+  const techumbre = db.licitaciones.find((l) => l.titulo.startsWith('Reparación de techumbre'))
+  if (techumbre) techumbre.documentosRequeridos = [
+    { id: nextId(db, 'requerido'), nombre: 'Certificado F30 (antecedentes laborales y previsionales)', obligatorio: true },
+    { id: nextId(db, 'requerido'), nombre: 'Fotografías de trabajos anteriores', obligatorio: false },
+  ]
 
   // Chats de las adjudicadas
   db.postulaciones.filter((p) => p.adjudicada).forEach((p) => {

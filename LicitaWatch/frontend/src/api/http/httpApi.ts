@@ -79,11 +79,13 @@ export const httpApi: Api = {
   alcancePymes: (rubroId, regionId) => get('/api/usuarios/alcance', { rubroId, regionId }),
   referenciaPresupuesto: (rubroId) => get('/api/licitaciones/referencia', { rubroId }),
   pulsoLicitacion: (id) => get(`/api/licitaciones/${id}/pulso`),
+  confianzaLicitador: (licitadorId) => get(`/api/licitaciones/licitador/${licitadorId}/confianza`),
   radarPymes: (rubroId, regionId) => get('/api/usuarios/radar', { rubroId, regionId }),
   cerrarLicitacion: (id) => post(`/api/licitaciones/${id}/cerrar`),
   async eliminarLicitacion(id) { await req('DELETE', `/api/licitaciones/${id}`) },
   postulantes: (id) => get(`/api/licitaciones/${id}/postulantes`),
-  postular: (id, mensaje) => post(`/api/licitaciones/${id}/postular`, { mensaje }),
+  postular: (id, mensaje, documentos) => post(`/api/licitaciones/${id}/postular`, { mensaje, documentos }),
+  documentoPostulacion: (postulacionId, docId) => get(`/api/postulaciones/${postulacionId}/documentos/${docId}`),
   misPostulaciones: () => get('/api/postulaciones/mias'),
   archivarPostulacion: (id, archivada) => req('PUT', `/api/postulaciones/${id}/archivada`, { archivada }),
   decidirPostulacion: (id, estado) => post(`/api/postulaciones/${id}/decision`, { estado }),
@@ -122,6 +124,7 @@ export const httpApi: Api = {
   misPagos: () => get('/api/ventas/pagos/mios'),
 
   preguntarAsistente: (texto) => post('/api/asistente/preguntar', { texto }),
+  redactarPostulacion: (licitacionId) => post('/api/asistente/redactar-postulacion', { licitacionId }),
 
   estadisticasAdmin: () => get('/api/admin/estadisticas'),
   usuariosAdmin: (f?: FiltroUsuarios) => get('/api/admin/usuarios', { ...f }),
