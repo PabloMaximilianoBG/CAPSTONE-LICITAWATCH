@@ -24,6 +24,7 @@ import { AdminSales } from './pages/admin/Sales'
 import { TenderDetail } from './pages/common/TenderDetail'
 import { Chat } from './pages/common/Chat'
 import { Profile } from './pages/common/Profile'
+import { Configuracion } from './pages/common/Configuracion'
 import { Notifications } from './pages/common/Notifications'
 import { Help } from './pages/common/Help'
 import { Card, EmptyState, Button } from './components/ui/ui'
@@ -61,6 +62,7 @@ function Privada() {
     { path: '/app/chat/:id', render: (p) => solo(['LICITADOR', 'PYME'], <Chat id={Number(p.id)} />, rol) },
     { path: '/app/notificaciones', render: () => <Notifications /> },
     { path: '/app/perfil', render: () => <Profile /> },
+    { path: '/app/configuracion', render: () => solo(['LICITADOR', 'PYME'], <Configuracion />, rol) },
     { path: '/app/ayuda', render: () => <Help /> },
     { path: '/app/usuarios', render: () => solo(['ADMIN'], <AdminUsers />, rol) },
     { path: '/app/licitaciones-admin', render: () => solo(['ADMIN'], <AdminTenders />, rol) },

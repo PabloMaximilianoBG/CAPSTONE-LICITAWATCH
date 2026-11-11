@@ -52,6 +52,14 @@ final class CorreoHtml {
             c.parrafos.add("Para crear una nueva contraseña, presiona el siguiente botón.");
             c.botonTexto = "Restablecer contraseña"; c.botonUrl = enlace; c.mostrarEnlace = true;
             c.aviso = "Por seguridad, este enlace expira en 1 hora y solo puede usarse una vez. Si no solicitaste este cambio, ignora este correo: tu contraseña actual sigue siendo válida.";
+        } else if ("CORREO".equals(tipo) && asunto != null && asunto.startsWith("Tu contraseña de LicitaWatch fue cambiada")) {
+            // Aviso tras cambiar la contraseña desde Configuración > Seguridad: lleva al login (no a recuperar la contraseña).
+            c.etiqueta = "Seguridad";
+            c.titulo = "Cambiaste tu contraseña";
+            c.parrafos.add("Cambiaste la contraseña de tu cuenta de LicitaWatch desde Configuración > Seguridad.");
+            c.parrafos.add("Desde ahora, inicia sesión con tu nueva contraseña.");
+            c.botonTexto = "Iniciar sesión"; c.botonUrl = appUrl + "/login";
+            c.aviso = "Si no fuiste tú, entra a LicitaWatch y usa «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión para recuperar tu cuenta.";
         } else if ("Licitación de tu rubro".equals(tipo)) {
             c.etiqueta = "Oportunidad";
             c.titulo = "Nueva licitación de tu rubro";

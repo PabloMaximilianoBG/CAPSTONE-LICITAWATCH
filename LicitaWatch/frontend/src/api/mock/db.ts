@@ -5,7 +5,8 @@ import type {
 import { calcularDv, formatearRut } from '../../lib/rut'
 import { REGIONES, rubroPorNombre, ciudadPorNombre } from './catalogs'
 
-export interface UsuarioDB extends Usuario { password: string }
+/** passwordActualizadaAt = último cambio de contraseña (vacío = sin cambios desde el registro). */
+export interface UsuarioDB extends Usuario { password: string; passwordActualizadaAt?: string }
 export interface LicitacionDB {
   id: number; licitadorId: number; titulo: string; descripcion: string; rubroId: number; regionId: number
   presupuestoMin?: number; presupuestoMax?: number; maxPostulantes?: number; duracionMeses?: number; imagenUrl?: string

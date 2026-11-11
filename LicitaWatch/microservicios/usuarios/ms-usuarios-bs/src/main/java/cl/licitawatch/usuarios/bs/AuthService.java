@@ -3,6 +3,7 @@ package cl.licitawatch.usuarios.bs;
 import cl.licitawatch.common.ApiException;
 import cl.licitawatch.common.InternalClient;
 import cl.licitawatch.common.JwtService;
+import cl.licitawatch.usuarios.bs.Dto.SeguridadDto;
 import cl.licitawatch.usuarios.bs.Dto.SesionDto;
 import cl.licitawatch.usuarios.bs.Dto.UsuarioDto;
 import cl.licitawatch.usuarios.bs.UsuariosBd.UsuarioFila;
@@ -11,17 +12,25 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 @Service
 public class AuthService {
     private final UsuariosBd bd;
     private final JwtService jwt; private final InternalClient interno;
     private final BCryptPasswordEncoder enc = new BCryptPasswordEncoder();
-    private final String urlNotif, appUrl;
+    private final String urlNotif, urlVentas, appUrl;
+    /** Último envío del correo de verificación por usuario: máximo uno por minuto (en memoria; se reinicia con el servicio). */
+    private final Map<Long, Instant> ultimoReenvio = new ConcurrentHashMap<>();
+    private static final long REENVIO_SEGUNDOS = 60;
 
-    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno,
-                       @Value("${lw.urls.notificaciones}") String urlNotif, @Value("${lw.app.url}") String appUrl) {
-        this.bd = bd; this.jwt = jwt; this.interno = interno; this.urlNotif = urlNotif; this.appUrl = appUrl;
+    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno, @Value("${lw.urls.notificaciones}") String urlNotif,
+                       @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.app.url}") String appUrl) {
+        this.bd = bd; this.jwt = jwt; this.interno = interno; this.urlNotif = urlNotif; this.urlVentas = urlVentas; this.appUrl = appUrl;
     }
 
     public static String validarPassword(String p) {
@@ -104,8 +113,56 @@ public class AuthService {
         try { bd.cambiar(id, null, true, null); } catch (ApiException e) { throw ApiException.invalido("El enlace de verificación no es válido"); }
     }
 
-    /** Responde siempre igual (no revela qué cuentas existen). Solo reenvía si la cuenta existe, está activa y aún no se verifica. */
+    /** Responde siempre igual (no revela qué cuentas existen). Solo reenvía si la cuenta existe, está activa, aún no se verifica y pasó 1 minuto del último envío. */
     public void reenviarVerificacion(String email) {
-        bd.porEmail(email).filter(u -> u.activo() && !u.emailVerificado()).ifPresent(this::enviarVerificacion);
+        bd.porEmail(email).filter(u -> u.activo() && !u.emailVerificado() && esperaReenvio(u.id()) == 0)
+                .ifPresent(u -> { ultimoReenvio.put(u.id(), Instant.now()); enviarVerificacion(u); });
+    }
+
+    /** Segundos que faltan para poder reenviar el correo de verificación (0 = ya se puede). */
+    private long esperaReenvio(long usuarioId) {
+        Instant ultimo = ultimoReenvio.get(usuarioId);
+        return ultimo == null ? 0 : Math.max(0, REENVIO_SEGUNDOS - Duration.between(ultimo, Instant.now()).getSeconds());
+    }
+
+    // ---------- Configuración > Seguridad ----------
+    /** Resumen de seguridad de la cuenta con sesión: contraseña, verificación del correo, estado, plan y miembro desde. */
+    public SeguridadDto seguridad(long usuarioId) {
+        UsuarioFila u = bd.usuario(usuarioId);
+        String plan = null;
+        if ("PYME".equals(u.rol())) {
+            try { plan = interno.get(urlVentas + "/internal/suscripciones/" + usuarioId, com.fasterxml.jackson.databind.JsonNode.class).path("plan").path("nombre").asText(null); }
+            catch (Exception ignorada) { /* Ventas caído: la tarjeta se muestra sin el plan */ }
+        }
+        return new SeguridadDto(u.email(), u.passwordActualizadaAt(), u.emailVerificado(), u.activo(), plan, u.createdAt(), esperaReenvio(usuarioId));
+    }
+
+    /**
+     * Cambio de contraseña con sesión: valida la actual, las reglas del registro y que la nueva sea distinta; luego avisa por correo.
+     * Responde 400 (no 401) si la actual no coincide, para que el front no lo confunda con una sesión vencida.
+     */
+    public SeguridadDto cambiarPassword(long usuarioId, String actual, String nueva) {
+        UsuarioFila u = bd.usuario(usuarioId);
+        if (actual == null || !enc.matches(actual, u.password())) throw ApiException.invalido("La contraseña actual no es correcta");
+        String err = validarPassword(nueva);
+        if (err != null) throw ApiException.invalido(err);
+        if (enc.matches(nueva, u.password())) throw ApiException.invalido("La nueva contraseña debe ser distinta de la actual");
+        bd.cambiar(usuarioId, null, null, enc.encode(nueva));
+        // Aviso por correo: notificar() nunca rompe el flujo si el servicio de correo falla.
+        interno.notificar(urlNotif, usuarioId, "CORREO", "Tu contraseña de LicitaWatch fue cambiada",
+                "Cambiaste la contraseña de tu cuenta " + u.email() + " desde Configuración > Seguridad. Inicia sesión con tu nueva contraseña: "
+                        + appUrl + "/login", true);
+        return seguridad(usuarioId);
+    }
+
+    /** Reenvía el correo de verificación a la cuenta con sesión (máximo uno por minuto). */
+    public SeguridadDto reenviarVerificacionSesion(long usuarioId) {
+        UsuarioFila u = bd.usuario(usuarioId);
+        if (u.emailVerificado()) throw ApiException.invalido("Tu correo ya está verificado");
+        long espera = esperaReenvio(usuarioId);
+        if (espera > 0) throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "Ya te enviamos un correo hace poco. Podrás pedir otro en " + espera + " segundos.");
+        ultimoReenvio.put(usuarioId, Instant.now());
+        enviarVerificacion(u);
+        return seguridad(usuarioId);
     }
 }

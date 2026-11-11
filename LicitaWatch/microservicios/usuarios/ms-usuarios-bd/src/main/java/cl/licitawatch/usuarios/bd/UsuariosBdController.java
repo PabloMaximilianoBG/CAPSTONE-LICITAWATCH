@@ -19,7 +19,7 @@ import java.util.Optional;
 public class UsuariosBdController {
     /** password = hash bcrypt (lo calcula la capa BS; aquí nunca llega la clave en texto plano). */
     public record UsuarioFila(Long id, String email, String password, String rol, boolean activo, boolean emailVerificado, Instant createdAt, String foto, Instant ultimoLogin,
-                              boolean aceptaTerminos, Instant terminosAceptadosAt, String versionTerminos, String versionPolitica) {}
+                              boolean aceptaTerminos, Instant terminosAceptadosAt, String versionTerminos, String versionPolitica, Instant passwordActualizadaAt) {}
     /** Perfil de la tabla que corresponde al rol. tipo = LICITADOR | PYME | ADMIN; nombre y area solo aplican al administrador. */
     public record PerfilFila(Long usuarioId, String tipo, String razonSocial, String rut, String rutPersona, String nombreContacto, String emailContacto, String telefono,
                              Integer rubroId, Integer ciudadId, Integer tamanoEmpresaId, String descripcionEmpresa, String sitioWeb, Instant updatedAt, String nombre, String area) {}
@@ -45,7 +45,7 @@ public class UsuariosBdController {
     // ---------- mapeo ----------
     private static UsuarioFila fila(Usuario u) {
         return new UsuarioFila(u.getId(), u.getEmail(), u.getPassword(), u.getRolNombre(), u.isActivo(), u.isEmailVerificado(), u.getCreatedAt(), u.getFoto(), u.getUltimoLogin(),
-                u.isAceptaTerminos(), u.getTerminosAceptadosAt(), u.getVersionTerminos(), u.getVersionPolitica());
+                u.isAceptaTerminos(), u.getTerminosAceptadosAt(), u.getVersionTerminos(), u.getVersionPolitica(), u.getPasswordActualizadaAt());
     }
     private static PerfilFila fila(PerfilBase p, String tipo) {
         return new PerfilFila(p.getUsuarioId(), tipo, p.getRazonSocial(), p.getRut(), p.getRutPersona(), p.getNombreContacto(), p.getEmailContacto(), p.getTelefono(),
@@ -102,7 +102,7 @@ public class UsuariosBdController {
         Usuario u = usuario(id);
         if (c.activo() != null) u.setActivo(c.activo());
         if (c.emailVerificado() != null) u.setEmailVerificado(c.emailVerificado());
-        if (c.password() != null) u.setPassword(c.password());
+        if (c.password() != null) { u.setPassword(c.password()); u.setPasswordActualizadaAt(Instant.now()); }
         return fila(u);
     }
 

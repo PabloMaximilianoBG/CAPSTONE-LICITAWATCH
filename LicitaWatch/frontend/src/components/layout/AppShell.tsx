@@ -22,7 +22,10 @@ const NAV: Record<Rol, { titulo?: string; items: Item[] }[]> = {
       { to: '/app/chat', label: 'Chat', icon: 'chat' },
       { to: '/app/notificaciones', label: 'Notificaciones', icon: 'bell' },
     ] },
-    { titulo: 'Cuenta', items: [{ to: '/app/perfil', label: 'Mi perfil', icon: 'user' }] },
+    { titulo: 'Cuenta', items: [
+      { to: '/app/perfil', label: 'Mi perfil', icon: 'user' },
+      { to: '/app/configuracion', label: 'Configuración', icon: 'settings' },
+    ] },
   ],
   PYME: [
     { titulo: 'Principal', items: [
@@ -38,6 +41,7 @@ const NAV: Record<Rol, { titulo?: string; items: Item[] }[]> = {
     { titulo: 'Cuenta', items: [
       { to: '/app/suscripcion', label: 'Mi suscripción', icon: 'crown' },
       { to: '/app/perfil', label: 'Mi perfil', icon: 'user' },
+      { to: '/app/configuracion', label: 'Configuración', icon: 'settings' },
     ] },
   ],
   ADMIN: [

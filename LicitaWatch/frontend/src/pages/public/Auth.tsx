@@ -24,7 +24,8 @@ export function Login() {
   const toast = useToast()
   const { search } = useLocation()
   const recienVerificada = search.get('verificada') === '1'
-  const [email, setEmail] = useState('')
+  const passwordCambiada = search.get('password') === '1'   // viene de Configuración > Seguridad tras cambiar la contraseña
+  const [email, setEmail] = useState(search.get('email') ?? '')
   const [pass, setPass] = useState('')
   const [ver, setVer] = useState(false)
   const [cargando, setCargando] = useState(false)
@@ -75,6 +76,7 @@ export function Login() {
           <h1>Inicia sesión</h1>
           <p className="auth-sub">Ingresa tus credenciales para acceder a tu panel.</p>
           {recienVerificada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />¡Tu cuenta fue verificada! Ya puedes iniciar sesión.</div>}
+          {passwordCambiada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />Cambiaste tu contraseña. Inicia sesión con la nueva.</div>}
           <form onSubmit={(e) => enviar(e)} noValidate>
             <Field label="Correo electrónico" required><Input icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.cl" autoComplete="email" autoFocus /></Field>
             <Field label="Contraseña" required>
