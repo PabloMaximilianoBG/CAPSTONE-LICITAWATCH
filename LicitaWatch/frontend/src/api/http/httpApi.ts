@@ -60,6 +60,9 @@ export const httpApi: Api = {
   consultarSii: (rut) => get(`/api/sii/${encodeURIComponent(rut)}`),
   async solicitarRecuperacion(email) { await post('/api/auth/recuperar', { email }) },
   async restablecerPassword(token, password) { await post('/api/auth/restablecer', { token, password }) },
+  seguridadCuenta: () => get('/api/usuarios/seguridad'),
+  cambiarPassword: (actual, nueva) => req('PUT', '/api/usuarios/password', { actual, nueva }),
+  reenviarVerificacionSesion: () => post('/api/usuarios/verificacion/reenviar'),
 
   rubros: () => get('/api/catalogos/rubros'),
   regiones: () => get('/api/catalogos/regiones'),

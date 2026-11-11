@@ -167,12 +167,16 @@ export function StatCard({ icon, label, valor, delta, tono = 'accent', extra }: 
     </div>
   )
 }
-export function Tabs<T extends string>({ valor, onChange, items }: { valor: T; onChange: (v: T) => void; items: { id: T; label: string; count?: number }[] }) {
+export function Tabs<T extends string>({ valor, onChange, items }: {
+  valor: T; onChange: (v: T) => void; items: { id: T; label: string; count?: number; icon?: IconName; disabled?: boolean; nota?: string }[]
+}) {
   return (
     <div className="tabs" role="tablist">
       {items.map((i) => (
-        <button key={i.id} role="tab" aria-selected={valor === i.id} className={`tab ${valor === i.id ? 'on' : ''}`} onClick={() => onChange(i.id)}>
+        <button key={i.id} role="tab" aria-selected={valor === i.id} className={`tab ${valor === i.id ? 'on' : ''}`} disabled={i.disabled} onClick={() => onChange(i.id)}>
+          {i.icon && <Icon name={i.icon} size={15} />}
           {i.label}
+          {i.nota && <span className="tab-nota">{i.nota}</span>}
           {i.count != null && <span className="tab-count">{i.count}</span>}
         </button>
       ))}

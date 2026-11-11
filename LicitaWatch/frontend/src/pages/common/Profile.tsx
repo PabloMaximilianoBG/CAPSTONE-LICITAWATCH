@@ -8,6 +8,7 @@ import { Icon } from '../../lib/icons'
 import { formatearRut } from '../../lib/rut'
 import { fotoCuadrada, TIPOS_FOTO } from '../../lib/imagen'
 import { validarEmail, fechaCorta } from '../../lib/format'
+import { navigate } from '../../lib/router'
 
 export function Profile() {
   const { sesion, actualizarPerfil, actualizarUsuario } = useAuth()
@@ -57,7 +58,8 @@ export function Profile() {
 
   return (
     <div className="stack">
-      <PageHeader title="Mi perfil" subtitle="Estos son los datos que ingresaste al registrarte." />
+      <PageHeader title="Mi perfil" subtitle="Estos son los datos que ingresaste al registrarte."
+        actions={sesion?.usuario.rol !== 'ADMIN' ? <Button variant="outline" icon="settings" onClick={() => navigate('/app/configuracion')}>Configuración y seguridad</Button> : undefined} />
       <div className="grid-main">
         <div className="stack">
           <Card pad={false} className="profile-card">

@@ -1,7 +1,7 @@
 import type {
   Api, CambioPrecioPlan, Conversacion, EstadisticasAdmin, EstadoPostulacion, FiltroLicitaciones, FiltroUsuarios, Licitacion, MensajeAsistente,
   MetodoPago, NuevaLicitacion, Perfil, Plan, Postulacion, PuntoMensual, RegistroLicitador, RegistroOk, RegistroPyme,
-  ResumenLicitador, ResumenPyme, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
+  ResumenLicitador, ResumenPyme, SeguridadCuenta, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
 import { ApiError } from '../errors'
 import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, MAX_REQUERIDOS, PLAZO_MINIMO_DIAS } from '../types'
@@ -187,6 +187,17 @@ function registrar(db: DB, d: RegistroLicitador, rol: 'LICITADOR' | 'PYME', tama
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+/** Último reenvío del correo de verificación por usuario (máximo uno por minuto, como el backend; en memoria). */
+const ultimoReenvio: Record<number, number> = {}
+const esperaReenvio = (id: number) => Math.max(0, Math.ceil(60 - (Date.now() - (ultimoReenvio[id] ?? 0)) / 1000))
+function seguridadDe(db: DB, id: number): SeguridadCuenta {
+  const u = db.usuarios.find((x) => x.id === id)!
+  return {
+    email: u.email, passwordActualizadaAt: u.passwordActualizadaAt, emailVerificado: verificado(u), activo: u.activo,
+    plan: u.rol === 'PYME' ? planActual(db, id).plan.nombre : undefined, miembroDesde: u.createdAt, reenvioDisponibleEn: esperaReenvio(id),
+  }
+}
+
 export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos']> } = {
   resetDemo() { resetDb(); setToken(null) },
   async correos() { await delay(80); return clon(loadDb().correos) },
@@ -237,8 +248,40 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     await delay(500)
     const db = loadDb()
     const u = db.usuarios.find((x) => x.email.toLowerCase() === email.trim().toLowerCase())
-    if (u && u.activo && !verificado(u)) { enviarVerificacion(db, u); saveDb() }
+    if (u && u.activo && !verificado(u) && esperaReenvio(u.id) === 0) { ultimoReenvio[u.id] = Date.now(); enviarVerificacion(db, u); saveDb() }
     // Respuesta idéntica exista o no la cuenta (no revela cuentas)
+  },
+  async seguridadCuenta() {
+    await delay(200)
+    const db = loadDb()
+    return seguridadDe(db, exigir(db, 'LICITADOR', 'PYME').id)
+  },
+  async cambiarPassword(actual, nueva) {
+    await delay(500)
+    const db = loadDb()
+    const u = db.usuarios.find((x) => x.id === exigir(db, 'LICITADOR', 'PYME').id)!
+    // Mismas reglas que el backend (400, no 401: el front no debe confundirlo con una sesión vencida).
+    if (u.password !== actual) throw new ApiError('La contraseña actual no es correcta', 400)
+    const err = validarPassword(nueva)
+    if (err) throw new ApiError(`La nueva contraseña no es segura: ${err.toLowerCase()}.`, 400)
+    if (nueva === actual) throw new ApiError('La nueva contraseña debe ser distinta de la actual', 400)
+    u.password = nueva
+    u.passwordActualizadaAt = ahora()
+    correo(db, u.id, 'Tu contraseña de LicitaWatch fue cambiada', `Cambiaste la contraseña de tu cuenta ${u.email} desde Configuración > Seguridad. Desde ahora, inicia sesión con tu nueva contraseña. Si no fuiste tú, usa «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.`, '/login', 'Iniciar sesión')
+    saveDb()
+    return seguridadDe(db, u.id)
+  },
+  async reenviarVerificacionSesion() {
+    await delay(400)
+    const db = loadDb()
+    const u = db.usuarios.find((x) => x.id === exigir(db, 'LICITADOR', 'PYME').id)!
+    if (verificado(u)) throw new ApiError('Tu correo ya está verificado', 400)
+    const espera = esperaReenvio(u.id)
+    if (espera > 0) throw new ApiError(`Ya te enviamos un correo hace poco. Podrás pedir otro en ${espera} segundos.`, 429)
+    ultimoReenvio[u.id] = Date.now()
+    enviarVerificacion(db, u)
+    saveDb()
+    return seguridadDe(db, u.id)
   },
   async emailDisponible(email) {
     await delay(250)
@@ -275,6 +318,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (err) throw new ApiError(`Contraseña insegura: ${err.toLowerCase()}.`, 422)
     const u = db.usuarios.find((x) => x.id === t.usuarioId)!
     u.password = password
+    u.passwordActualizadaAt = ahora()
     u.emailVerificado = true   // abrir el enlace del correo ya prueba que el correo es suyo
     t.usado = true
     correo(db, u.id, 'Tu contraseña fue actualizada', 'Tu contraseña de LicitaWatch se cambió correctamente.')

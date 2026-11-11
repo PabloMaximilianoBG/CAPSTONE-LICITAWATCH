@@ -40,6 +40,9 @@ public class UsuariosBsController {
     @GetMapping("/usuarios/disponibilidad/rut") public Disponible rut(@RequestParam String valor) { return new Disponible(registro.rutDisponible(valor)); }
     @GetMapping("/usuarios/disponibilidad/rut-persona") public Disponible rutPersona(@RequestParam String valor) { return new Disponible(registro.rutPersonaDisponible(valor)); }
 
+    @GetMapping("/usuarios/seguridad") public SeguridadDto seguridad(HttpServletRequest r) { return auth.seguridad(Auth.sesion(r).usuarioId()); }
+    @PutMapping("/usuarios/password") public SeguridadDto password(HttpServletRequest r, @RequestBody CambioPassword b) { return auth.cambiarPassword(Auth.sesion(r).usuarioId(), b.actual(), b.nueva()); }
+    @PostMapping("/usuarios/verificacion/reenviar") public SeguridadDto reenviarSesion(HttpServletRequest r) { return auth.reenviarVerificacionSesion(Auth.sesion(r).usuarioId()); }
     @PutMapping("/usuarios/foto") public UsuarioDto foto(HttpServletRequest r, @RequestBody Foto b) { return auth.actualizarFoto(Auth.sesion(r).usuarioId(), b.foto()); }
     @DeleteMapping("/usuarios/foto") public UsuarioDto quitarFoto(HttpServletRequest r) { return auth.actualizarFoto(Auth.sesion(r).usuarioId(), null); }
     @PutMapping("/usuarios/perfil") public PerfilDto perfil(HttpServletRequest r, @RequestBody PerfilEdicion b) { return registro.actualizarPerfil(Auth.sesion(r).usuarioId(), b); }

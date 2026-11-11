@@ -8,6 +8,12 @@ public final class Dto {
     private Dto() {}
     public record Login(@NotBlank String email, @NotBlank String password) {}
     public record Recuperar(@NotBlank String email) {}
+    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva) {}
+    /**
+     * Configuración > Seguridad: passwordActualizadaAt null = sin cambios desde el registro; plan solo para Pymes (Estándar o Premium);
+     * reenvioDisponibleEn = segundos que faltan para poder reenviar el correo de verificación (0 = ya se puede).
+     */
+    public record SeguridadDto(String email, Instant passwordActualizadaAt, boolean emailVerificado, boolean activo, String plan, Instant miembroDesde, long reenvioDisponibleEn) {}
     public record Restablecer(@NotBlank String token, @NotBlank String password) {}
     public record Verificar(@NotBlank String token) {}
     /** Respuesta del registro: la cuenta queda sin verificar y no se inicia sesión. */

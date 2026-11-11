@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS usuario (                -- 1 rol -> N usuarios
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   foto       TEXT,                                  -- foto de perfil (data URL JPEG 256x256); NULL = se muestran las iniciales
   ultimo_login TIMESTAMPTZ,                         -- último inicio de sesión correcto; NULL = nunca ha entrado
+  password_actualizada_at TIMESTAMPTZ,              -- último cambio de contraseña; NULL = sin cambios desde el registro
   acepta_terminos BOOLEAN NOT NULL DEFAULT TRUE,    -- aceptación obligatoria de Términos y Política al registrarse
   terminos_aceptados_at TIMESTAMPTZ,                -- fecha/hora de aceptación de los documentos legales
   version_terminos VARCHAR(32) NOT NULL DEFAULT '1.0', -- versión aceptada de Términos y Condiciones

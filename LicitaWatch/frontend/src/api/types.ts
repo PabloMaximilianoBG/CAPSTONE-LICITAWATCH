@@ -50,6 +50,18 @@ export interface Perfil {
   updatedAt: string
 }
 
+/** Configuración > Seguridad. passwordActualizadaAt vacío = sin cambios desde el registro; plan solo para Pymes. */
+export interface SeguridadCuenta {
+  email: string
+  passwordActualizadaAt?: string
+  emailVerificado: boolean
+  activo: boolean
+  plan?: string
+  miembroDesde: string
+  /** Segundos que faltan para poder reenviar el correo de verificación (máximo uno por minuto). */
+  reenvioDisponibleEn: number
+}
+
 export interface Sesion {
   token: string
   usuario: Usuario
@@ -463,6 +475,13 @@ export interface Api {
   consultarSii(rut: string): Promise<ConsultaSii>
   solicitarRecuperacion(email: string): Promise<void>
   restablecerPassword(token: string, password: string): Promise<void>
+
+  // Configuración > Seguridad (Licitador y Pyme)
+  seguridadCuenta(): Promise<SeguridadCuenta>
+  /** 400 si la actual no coincide, si la nueva no cumple las reglas o si es igual a la actual. Envía un correo de aviso. */
+  cambiarPassword(actual: string, nueva: string): Promise<SeguridadCuenta>
+  /** Reenvía el correo de verificación de la cuenta con sesión (429 si no pasó 1 minuto). */
+  reenviarVerificacionSesion(): Promise<SeguridadCuenta>
 
   // Catálogos
   rubros(): Promise<Catalogo[]>

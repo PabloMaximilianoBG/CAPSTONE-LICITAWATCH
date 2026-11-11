@@ -7,6 +7,7 @@ public final class Dto {
     private Dto() {}
     public record Login(@NotBlank String email, @NotBlank String password) {}
     public record Recuperar(@NotBlank String email) {}
+    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva) {}
     public record Restablecer(@NotBlank String token, @NotBlank String password) {}
     public record Verificar(@NotBlank String token) {}
     public record Estado(boolean activo) {}

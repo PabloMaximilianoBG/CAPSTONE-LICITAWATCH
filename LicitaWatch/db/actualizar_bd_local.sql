@@ -14,6 +14,7 @@
 \ir migracion_email_verificado.sql
 \ir migracion_ultimo_login.sql
 \ir migracion_terminos_legales.sql
+\ir migracion_seguridad_fase1.sql
 
 \echo '== licitawatch_licitaciones'
 \c licitawatch_licitaciones
