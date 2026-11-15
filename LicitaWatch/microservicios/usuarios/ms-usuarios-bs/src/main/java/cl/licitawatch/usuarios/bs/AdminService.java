@@ -16,12 +16,13 @@ import java.util.stream.Collectors;
 
 @Service
 public class AdminService {
-    private final UsuariosBd bd; private final InternalClient interno;
+    private final UsuariosBd bd; private final InternalClient interno; private final SesionService sesiones;
     private final String urlVentas, urlLicitaciones;
     private static final String[] MESES = {"ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"};
 
-    public AdminService(UsuariosBd bd, InternalClient interno, @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.urls.licitaciones}") String urlLicitaciones) {
-        this.bd = bd; this.interno = interno; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones;
+    public AdminService(UsuariosBd bd, InternalClient interno, SesionService sesiones, @Value("${lw.urls.ventas}") String urlVentas,
+                        @Value("${lw.urls.licitaciones}") String urlLicitaciones) {
+        this.bd = bd; this.interno = interno; this.sesiones = sesiones; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones;
     }
 
     public List<UsuarioAdmin> listar(String q, String rol, String estado) {
@@ -49,6 +50,7 @@ public class AdminService {
         UsuarioFila u = bd.usuario(id);
         if ("ADMIN".equals(u.rol())) throw ApiException.prohibido("No se puede bloquear a un administrador");
         bd.cambiar(id, activo, null, null);
+        if (!activo) sesiones.cerrarOtras(id, null);   // bloqueada: se cierran todas sus sesiones
     }
 
     public void eliminar(long id) {

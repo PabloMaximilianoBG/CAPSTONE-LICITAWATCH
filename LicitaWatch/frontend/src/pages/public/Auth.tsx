@@ -25,6 +25,7 @@ export function Login() {
   const { search } = useLocation()
   const recienVerificada = search.get('verificada') === '1'
   const passwordCambiada = search.get('password') === '1'   // viene de Configuración > Seguridad tras cambiar la contraseña
+  const sesionTerminada = search.get('sesion')   // «cerrada» (desde otro dispositivo) o «expirada»
   const [email, setEmail] = useState(search.get('email') ?? '')
   const [pass, setPass] = useState('')
   const [ver, setVer] = useState(false)
@@ -77,6 +78,7 @@ export function Login() {
           <p className="auth-sub">Ingresa tus credenciales para acceder a tu panel.</p>
           {recienVerificada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />¡Tu cuenta fue verificada! Ya puedes iniciar sesión.</div>}
           {passwordCambiada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />Cambiaste tu contraseña. Inicia sesión con la nueva.</div>}
+          {sesionTerminada && <div className="alert alert-warn"><Icon name="lock" size={18} />{sesionTerminada === 'cerrada' ? 'Tu sesión fue cerrada. Inicia sesión nuevamente.' : 'Tu sesión expiró. Inicia sesión nuevamente.'}</div>}
           <form onSubmit={(e) => enviar(e)} noValidate>
             <Field label="Correo electrónico" required><Input icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.cl" autoComplete="email" autoFocus /></Field>
             <Field label="Contraseña" required>

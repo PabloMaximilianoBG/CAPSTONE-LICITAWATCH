@@ -20,12 +20,15 @@ import java.util.List;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
     public static final String ATTR = "lw.sesion";
+    /** Mensaje del 401 de una sesión cerrada (el front lo usa para avisar «Tu sesión fue cerrada»). */
+    public static final String SESION_CERRADA = "Tu sesión fue cerrada. Inicia sesión nuevamente.";
     private final JwtService jwt;
     private final List<String> publicas;
     private final String internalKey;
+    private final SesionesVigentes sesiones;
 
-    public JwtAuthFilter(JwtService jwt, @Value("${lw.publicas:}") List<String> publicas, @Value("${lw.internal-key}") String internalKey) {
-        this.jwt = jwt; this.publicas = publicas; this.internalKey = internalKey;
+    public JwtAuthFilter(JwtService jwt, @Value("${lw.publicas:}") List<String> publicas, @Value("${lw.internal-key}") String internalKey, SesionesVigentes sesiones) {
+        this.jwt = jwt; this.publicas = publicas; this.internalKey = internalKey; this.sesiones = sesiones;
     }
 
     @Override
@@ -35,20 +38,28 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (path.startsWith("/internal/") || path.startsWith("/bs/") || path.startsWith("/bd/") || path.startsWith("/ambassador/")) {
             if (!internalKey.equals(req.getHeader(InternalClient.H_KEY))) { error(res, 403, "Acceso interno denegado"); return; }
             String id = req.getHeader(InternalClient.H_USUARIO), rol = req.getHeader(InternalClient.H_ROL);
-            if (id != null && rol != null) req.setAttribute(ATTR, new Sesion(Long.parseLong(id), rol));
+            if (id != null && rol != null) req.setAttribute(ATTR, new Sesion(Long.parseLong(id), rol, req.getHeader(InternalClient.H_SESION)));
             chain.doFilter(req, res);
             return;
         }
         String h = req.getHeader("Authorization");
         if (h != null && h.startsWith("Bearer ")) {
+            Claims c;
             try {
-                Claims c = jwt.validar(h.substring(7));
+                c = jwt.validar(h.substring(7));
                 String rol = c.get("rol", String.class);
                 // Los tokens de los enlaces del correo (recuperar contraseña y verificar cuenta) no son sesiones.
                 if ("RESET".equals(rol) || "VERIFICAR".equals(rol)) throw new IllegalStateException("token de un solo propósito no es sesión");
-                req.setAttribute(ATTR, new Sesion(Long.parseLong(c.getSubject()), c.get("rol", String.class)));
             } catch (Exception e) {
+                c = null;
                 if (!esPublica(path)) { error(res, 401, "Sesión expirada o inválida"); return; }
+            }
+            if (c != null) {
+                // Sesión registrada (jti): debe seguir vigente. Los tokens antiguos sin jti valen hasta que vencen.
+                String tokenId = c.getId();
+                if (tokenId != null && !sesiones.vigente(tokenId)) {
+                    if (!esPublica(path)) { error(res, 401, SESION_CERRADA); return; }
+                } else req.setAttribute(ATTR, new Sesion(Long.parseLong(c.getSubject()), c.get("rol", String.class), tokenId));
             }
         }
         if (req.getAttribute(ATTR) == null && !esPublica(path)) { error(res, 401, "Debes iniciar sesión"); return; }

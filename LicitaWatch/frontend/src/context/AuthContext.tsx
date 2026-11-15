@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { api } from '../api'
+import { EVENTO_SESION, type MotivoSesion } from '../api/errors'
+import { navigate } from '../lib/router'
 import type { Catalogo, Ciudad, Perfil, Sesion, Usuario } from '../api/types'
 
 interface AuthState {
@@ -20,6 +22,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     api.sesionActual().then((s) => setSesion(s)).finally(() => setCargando(false))
+  }, [])
+  // El servidor rechazó la sesión (cerrada desde otro dispositivo o vencida): se sale y, si estaba dentro de la app, va al login con el aviso.
+  useEffect(() => {
+    const h = (e: Event) => {
+      setSesion(null)
+      const motivo = (e as CustomEvent<MotivoSesion>).detail
+      if (window.location.pathname.startsWith('/app')) navigate(`/login?sesion=${motivo}`, true)
+    }
+    window.addEventListener(EVENTO_SESION, h)
+    return () => window.removeEventListener(EVENTO_SESION, h)
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {

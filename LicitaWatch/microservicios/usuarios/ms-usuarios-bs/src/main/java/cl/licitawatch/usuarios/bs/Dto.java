@@ -6,9 +6,13 @@ import java.time.Instant;
 /** Contratos JSON de la capa BS; el BFF los entrega tal cual al front (coinciden con src/api/types.ts). */
 public final class Dto {
     private Dto() {}
-    public record Login(@NotBlank String email, @NotBlank String password) {}
+    /** userAgent e ip los agrega el BFF (de la petición del navegador) para registrar la sesión. */
+    public record Login(@NotBlank String email, @NotBlank String password, String userAgent, String ip) {}
+    /** Sesión abierta del usuario (Configuración > Seguridad). ip = parcial; actual = la de este dispositivo. */
+    public record SesionActivaDto(Long id, String dispositivo, String navegador, String ip, Instant creadaAt, Instant ultimoUsoAt, boolean actual) {}
     public record Recuperar(@NotBlank String email) {}
-    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva) {}
+    /** cerrarOtras = cerrar además las otras sesiones abiertas del usuario. */
+    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva, boolean cerrarOtras) {}
     /**
      * Configuración > Seguridad: passwordActualizadaAt null = sin cambios desde el registro; plan solo para Pymes (Estándar o Premium);
      * reenvioDisponibleEn = segundos que faltan para poder reenviar el correo de verificación (0 = ya se puede).

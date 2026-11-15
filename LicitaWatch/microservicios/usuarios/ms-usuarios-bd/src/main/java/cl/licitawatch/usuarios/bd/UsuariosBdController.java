@@ -35,10 +35,11 @@ public class UsuariosBdController {
     private final ConfigLegalRepo configLegal;
 
     public UsuariosBdController(UsuarioRepo usuarios, RolRepo roles, LicitadorRepo licitadores, PymeRepo pymes, AdministradorRepo admins,
-                                RubroRepo rubros, RegionRepo regiones, CiudadRepo ciudades, TamanoRepo tamanos, ConfigLegalRepo configLegal) {
+                                RubroRepo rubros, RegionRepo regiones, CiudadRepo ciudades, TamanoRepo tamanos, ConfigLegalRepo configLegal, SesionUsuarioRepo sesiones) {
         this.usuarios = usuarios; this.roles = roles; this.licitadores = licitadores; this.pymes = pymes; this.admins = admins;
-        this.rubros = rubros; this.regiones = regiones; this.ciudades = ciudades; this.tamanos = tamanos; this.configLegal = configLegal;
+        this.rubros = rubros; this.regiones = regiones; this.ciudades = ciudades; this.tamanos = tamanos; this.configLegal = configLegal; this.sesiones = sesiones;
     }
+    private final SesionUsuarioRepo sesiones;
 
     public record ConfigLegalFila(String urlTerminos, String urlPolitica, String versionTerminos, String versionPolitica) {}
 
@@ -117,7 +118,7 @@ public class UsuariosBdController {
     @DeleteMapping("/usuarios/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) @Transactional
     public void eliminar(@PathVariable long id) {
         Usuario u = usuario(id);
-        licitadores.deleteByUsuarioId(id); pymes.deleteByUsuarioId(id); admins.deleteByUsuarioId(id); usuarios.delete(u);
+        sesiones.deleteByUsuarioId(id); licitadores.deleteByUsuarioId(id); pymes.deleteByUsuarioId(id); admins.deleteByUsuarioId(id); usuarios.delete(u);
     }
 
     // ---------- perfil (licitador / pyme / administrador) ----------

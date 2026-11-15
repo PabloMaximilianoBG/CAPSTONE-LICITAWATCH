@@ -21,16 +21,16 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AuthService {
     private final UsuariosBd bd;
-    private final JwtService jwt; private final InternalClient interno;
+    private final JwtService jwt; private final InternalClient interno; private final SesionService sesiones;
     private final BCryptPasswordEncoder enc = new BCryptPasswordEncoder();
     private final String urlNotif, urlVentas, appUrl;
     /** Último envío del correo de verificación por usuario: máximo uno por minuto (en memoria; se reinicia con el servicio). */
     private final Map<Long, Instant> ultimoReenvio = new ConcurrentHashMap<>();
     private static final long REENVIO_SEGUNDOS = 60;
 
-    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno, @Value("${lw.urls.notificaciones}") String urlNotif,
+    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno, SesionService sesiones, @Value("${lw.urls.notificaciones}") String urlNotif,
                        @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.app.url}") String appUrl) {
-        this.bd = bd; this.jwt = jwt; this.interno = interno; this.urlNotif = urlNotif; this.urlVentas = urlVentas; this.appUrl = appUrl;
+        this.bd = bd; this.jwt = jwt; this.interno = interno; this.sesiones = sesiones; this.urlNotif = urlNotif; this.urlVentas = urlVentas; this.appUrl = appUrl;
     }
 
     public static String validarPassword(String p) {
@@ -43,14 +43,15 @@ public class AuthService {
 
     public String hash(String password) { return enc.encode(password); }
 
-    public SesionDto login(String email, String password) {
+    public SesionDto login(String email, String password, String userAgent, String ip) {
         UsuarioFila u = bd.porEmail(email).orElseThrow(() -> ApiException.noAutorizado("Correo o contraseña incorrectos"));
         if (!enc.matches(password, u.password())) throw ApiException.noAutorizado("Correo o contraseña incorrectos");
         if (!u.activo()) throw ApiException.prohibido("Tu cuenta está bloqueada. Contacta al administrador.");
         // 428: el front lo usa para ofrecer "Reenviar correo de verificación".
         if (!u.emailVerificado()) throw new ApiException(HttpStatus.PRECONDITION_REQUIRED, "Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.");
         u = bd.marcarLogin(u.id());
-        return sesion(u, jwt.emitir(u.id(), u.rol()));
+        String tokenId = sesiones.registrar(u.id(), userAgent, ip);   // sesion_usuario: se puede listar y cerrar desde Configuración
+        return sesion(u, jwt.emitir(u.id(), u.rol(), tokenId));
     }
 
     /** Re-autenticación para acciones sensibles (p. ej. cambiar el precio de un plan): la contraseña coincide y la cuenta está activa. */
@@ -141,13 +142,14 @@ public class AuthService {
      * Cambio de contraseña con sesión: valida la actual, las reglas del registro y que la nueva sea distinta; luego avisa por correo.
      * Responde 400 (no 401) si la actual no coincide, para que el front no lo confunda con una sesión vencida.
      */
-    public SeguridadDto cambiarPassword(long usuarioId, String actual, String nueva) {
+    public SeguridadDto cambiarPassword(long usuarioId, String actual, String nueva, boolean cerrarOtras, String tokenActual) {
         UsuarioFila u = bd.usuario(usuarioId);
         if (actual == null || !enc.matches(actual, u.password())) throw ApiException.invalido("La contraseña actual no es correcta");
         String err = validarPassword(nueva);
         if (err != null) throw ApiException.invalido(err);
         if (enc.matches(nueva, u.password())) throw ApiException.invalido("La nueva contraseña debe ser distinta de la actual");
         bd.cambiar(usuarioId, null, null, enc.encode(nueva));
+        if (cerrarOtras) sesiones.cerrarOtras(usuarioId, tokenActual);
         // Aviso por correo: notificar() nunca rompe el flujo si el servicio de correo falla.
         interno.notificar(urlNotif, usuarioId, "CORREO", "Tu contraseña de LicitaWatch fue cambiada",
                 "Cambiaste la contraseña de tu cuenta " + u.email() + " desde Configuración > Seguridad. Inicia sesión con tu nueva contraseña: "

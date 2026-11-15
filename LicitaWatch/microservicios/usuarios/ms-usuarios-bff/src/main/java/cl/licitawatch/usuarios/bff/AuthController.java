@@ -26,7 +26,23 @@ public class AuthController {
     private JsonNode get(String ruta) { return bs.get(urlBs + ruta, JsonNode.class); }
     private JsonNode post(String ruta, Object body) { return bs.post(urlBs + ruta, body, JsonNode.class); }
 
-    @PostMapping("/api/auth/login") public JsonNode login(@Valid @RequestBody Login b) { return post("/bs/auth/login", b); }
+    /** Se agregan el navegador (User-Agent) y la IP de origen para registrar la sesión; la contraseña nunca se registra en logs. */
+    @PostMapping("/api/auth/login")
+    public JsonNode login(HttpServletRequest r, @Valid @RequestBody Login b) {
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("email", b.email()); body.put("password", b.password()); body.put("userAgent", r.getHeader("User-Agent")); body.put("ip", ipDe(r));
+        return post("/bs/auth/login", body);
+    }
+    /** Cierra la sesión actual en el servidor (deja de servir aunque el token no haya vencido). */
+    @PostMapping("/api/auth/logout") public Map<String, String> logout(HttpServletRequest r) { Auth.sesion(r); post("/bs/auth/logout", Map.of()); return Map.of("mensaje", "Sesión cerrada"); }
+
+    /** IP del navegador: el gateway la deja en X-Forwarded-For (la primera de la lista); si no, la de la conexión. */
+    private static String ipDe(HttpServletRequest r) {
+        String xff = r.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        String real = r.getHeader("X-Real-IP");
+        return real != null && !real.isBlank() ? real.trim() : r.getRemoteAddr();
+    }
 
     /** La capa BS arma la sesión; el token es el mismo que trajo la petición. */
     @GetMapping("/api/auth/me")
@@ -71,6 +87,11 @@ public class AuthController {
     @GetMapping("/api/usuarios/seguridad") public JsonNode seguridad(HttpServletRequest r) { Auth.exigir(r, "LICITADOR", "PYME"); return get("/bs/usuarios/seguridad"); }
     @PutMapping("/api/usuarios/password")
     public JsonNode password(HttpServletRequest r, @Valid @RequestBody CambioPassword b) { Auth.exigir(r, "LICITADOR", "PYME"); return bs.put(urlBs + "/bs/usuarios/password", b, JsonNode.class); }
+    @GetMapping("/api/usuarios/sesiones") public JsonNode sesiones(HttpServletRequest r) { Auth.exigir(r, "LICITADOR", "PYME"); return get("/bs/usuarios/sesiones"); }
+    @DeleteMapping("/api/usuarios/sesiones/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cerrarSesion(HttpServletRequest r, @PathVariable long id) { Auth.exigir(r, "LICITADOR", "PYME"); bs.delete(urlBs + "/bs/usuarios/sesiones/" + id); }
+    @PostMapping("/api/usuarios/sesiones/cerrar-otras")
+    public JsonNode cerrarOtras(HttpServletRequest r) { Auth.exigir(r, "LICITADOR", "PYME"); return post("/bs/usuarios/sesiones/cerrar-otras", Map.of()); }
     @PostMapping("/api/usuarios/verificacion/reenviar")
     public JsonNode reenviarVerificacion(HttpServletRequest r) { Auth.exigir(r, "LICITADOR", "PYME"); return post("/bs/usuarios/verificacion/reenviar", Map.of()); }
     @PutMapping("/api/usuarios/foto") public JsonNode foto(HttpServletRequest r, @Valid @RequestBody Foto b) { Auth.sesion(r); return bs.put(urlBs + "/bs/usuarios/foto", b, JsonNode.class); }

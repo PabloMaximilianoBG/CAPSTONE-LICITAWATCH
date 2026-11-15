@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api } from '../../api'
-import type { SeguridadCuenta } from '../../api/types'
+import type { SeguridadCuenta, SesionActiva } from '../../api/types'
 import { Badge, Button, Card, Cargando, EmptyState, Field, Input, Modal, Tabs, useAsync, useToast } from '../../components/ui/ui'
 import { FortalezaPassword } from '../../components/app/FortalezaPassword'
 import { useAuth } from '../../context/AuthContext'
 import { Icon, type IconName } from '../../lib/icons'
 import { navigate } from '../../lib/router'
-import { fechaCorta, validarPassword } from '../../lib/format'
+import { fechaCorta, hace, validarPassword } from '../../lib/format'
 
 /* Configuración de la cuenta (Licitador y Pyme). Pestaña Seguridad; Notificaciones queda lista para más adelante. */
 
@@ -55,10 +55,11 @@ function Seguridad() {
   const s = seg.data
   return (
     <div className="cfg-lista">
-      <p className="cfg-intro">Protege tu acceso y revisa el estado de verificación de tu cuenta.</p>
+      <p className="cfg-intro">Protege tu acceso, revisa tus sesiones activas y el estado de verificación de tu cuenta.</p>
       <Fila icon="lock" titulo="Contraseña" accion={<Button size="sm" variant="outline" onClick={() => setCambiar(true)}>Cambiar</Button>}>
         <small>{s.passwordActualizadaAt ? `Actualizada: ${diasDesde(s.passwordActualizadaAt)}` : 'Sin cambios desde el registro'}</small>
       </Fila>
+      <Sesiones />
       <VerificacionEmail s={s} onCambio={seg.setData} />
       <Fila icon="user" titulo="Estado de la cuenta" accion={<Badge tono={s.activo ? 'green' : 'red'} dot>{s.activo ? 'Activa' : 'Suspendida'}</Badge>}>
         <small>{s.plan ? `Plan ${s.plan} · ` : ''}Miembro desde {fechaCorta(s.miembroDesde)}</small>
@@ -105,9 +106,10 @@ function CambiarPassword({ abierto, onClose }: { abierto: boolean; onClose: () =
   const [nueva, setNueva] = useState('')
   const [repetir, setRepetir] = useState('')
   const [ver, setVer] = useState(false)
+  const [cerrarOtras, setCerrarOtras] = useState(true)
   const [errores, setErrores] = useState<Record<string, string>>({})
   const [guardando, setGuardando] = useState(false)
-  useEffect(() => { if (!abierto) { setActual(''); setNueva(''); setRepetir(''); setErrores({}); setVer(false) } }, [abierto])
+  useEffect(() => { if (!abierto) { setActual(''); setNueva(''); setRepetir(''); setErrores({}); setVer(false); setCerrarOtras(true) } }, [abierto])
 
   const guardar = async () => {
     const e: Record<string, string> = {}
@@ -121,7 +123,7 @@ function CambiarPassword({ abierto, onClose }: { abierto: boolean; onClose: () =
     if (Object.keys(e).length) return
     setGuardando(true)
     try {
-      await api.cambiarPassword(actual, nueva)
+      await api.cambiarPassword(actual, nueva, cerrarOtras)
       // Se cierra la sesión y se vuelve al login para entrar con la nueva contraseña (el correo ya va prellenado).
       const email = sesion?.usuario.email ?? ''
       await logout()
@@ -146,8 +148,63 @@ function CambiarPassword({ abierto, onClose }: { abierto: boolean; onClose: () =
         <Field label="Repetir nueva contraseña" required error={errores.repetir} ok={!!repetir && repetir === nueva}>
           <Input type={tipo} autoComplete="new-password" value={repetir} onChange={(e) => setRepetir(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && guardar()} />
         </Field>
+        <label className="cfg-check"><input type="checkbox" checked={cerrarOtras} onChange={(e) => setCerrarOtras(e.target.checked)} />Cerrar también mis otras sesiones (en otros dispositivos)</label>
         <p className="pub-nota"><Icon name="info" size={14} />Al guardar, cerraremos tu sesión para que entres con la nueva contraseña, y te avisaremos por correo.</p>
       </div>
     </Modal>
+  )
+}
+
+/** Tarjeta «Sesiones»: cuántas hay abiertas y cuándo se usó la última; «Ver sesiones» abre la lista para cerrarlas. */
+function Sesiones() {
+  const toast = useToast()
+  const lista = useAsync(() => api.misSesiones(), [])
+  const [abierto, setAbierto] = useState(false)
+  const [cerrando, setCerrando] = useState<number | 'otras' | null>(null)
+  const sesiones = lista.data ?? []
+  const otras = sesiones.filter((x) => !x.actual)
+  const ultima = sesiones.reduce<string | undefined>((m, x) => (!m || x.ultimoUsoAt > m ? x.ultimoUsoAt : m), undefined)
+
+  const cerrar = async (x: SesionActiva) => {
+    setCerrando(x.id)
+    try { await api.cerrarSesionRemota(x.id); lista.setData(sesiones.filter((y) => y.id !== x.id)); toast.ok(`Cerraste la sesión de ${x.dispositivo}.`) }
+    catch (e) { toast.error((e as Error).message) } finally { setCerrando(null) }
+  }
+  const cerrarOtras = async () => {
+    setCerrando('otras')
+    try {
+      const r = await api.cerrarOtrasSesiones()
+      lista.setData(sesiones.filter((y) => y.actual))
+      toast.ok(r.cerradas === 1 ? 'Cerraste 1 sesión.' : `Cerraste ${r.cerradas} sesiones.`)
+    } catch (e) { toast.error((e as Error).message) } finally { setCerrando(null) }
+  }
+
+  return (
+    <>
+      <Fila icon="grid" titulo="Sesiones" accion={<Button size="sm" variant="outline" onClick={() => { lista.recargar(); setAbierto(true) }} disabled={lista.loading && !lista.data}>Ver sesiones</Button>}>
+        <small>{lista.loading && !lista.data ? 'Cargando…' : !lista.data ? 'No pudimos cargar tus sesiones'
+          : `${sesiones.length} activa${sesiones.length === 1 ? '' : 's'}${ultima ? ` · Última: ${diasDesde(ultima)}` : ''}`}</small>
+      </Fila>
+      <Modal abierto={abierto} onClose={() => setAbierto(false)} titulo="Sesiones activas" ancho={620}
+        pie={<><Button variant="ghost" onClick={() => setAbierto(false)}>Cerrar</Button>
+          <Button variant="danger" icon="logout" disabled={!otras.length} loading={cerrando === 'otras'} onClick={cerrarOtras}>Cerrar todas las demás</Button></>}>
+        {lista.loading && !lista.data ? <Cargando /> : sesiones.length === 0 ? <EmptyState icon="grid" titulo="No hay sesiones registradas" texto="Las sesiones aparecen aquí desde tu próximo inicio de sesión." /> : (
+          <ul className="cfg-sesiones">
+            {sesiones.map((x) => (
+              <li key={x.id} className={x.actual ? 'actual' : ''}>
+                <span className="cfg-fila-ic"><Icon name={/Celular|Tablet/.test(x.dispositivo) ? 'phone' : 'globe'} size={18} /></span>
+                <div className="cfg-fila-txt">
+                  <b>{x.dispositivo} {x.actual && <Badge tono="blue">Este dispositivo</Badge>}</b>
+                  <small>{x.navegador} · IP {x.ip}</small>
+                  <small>Última actividad: {x.actual ? 'ahora' : hace(x.ultimoUsoAt)} · Inició {fechaCorta(x.creadaAt)}</small>
+                </div>
+                {!x.actual && <Button size="sm" variant="outline" loading={cerrando === x.id} disabled={cerrando != null} onClick={() => cerrar(x)}>Cerrar</Button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="pub-nota"><Icon name="info" size={14} />Una sesión cerrada deja de funcionar en ese dispositivo en menos de un minuto.</p>
+      </Modal>
+    </>
   )
 }

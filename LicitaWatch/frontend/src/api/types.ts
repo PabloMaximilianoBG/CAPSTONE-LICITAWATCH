@@ -62,6 +62,17 @@ export interface SeguridadCuenta {
   reenvioDisponibleEn: number
 }
 
+/** Sesión abierta del usuario (Configuración > Seguridad). ip parcial (sin el último octeto); actual = este dispositivo. */
+export interface SesionActiva {
+  id: number
+  dispositivo: string
+  navegador: string
+  ip: string
+  creadaAt: string
+  ultimoUsoAt: string
+  actual: boolean
+}
+
 export interface Sesion {
   token: string
   usuario: Usuario
@@ -479,7 +490,13 @@ export interface Api {
   // Configuración > Seguridad (Licitador y Pyme)
   seguridadCuenta(): Promise<SeguridadCuenta>
   /** 400 si la actual no coincide, si la nueva no cumple las reglas o si es igual a la actual. Envía un correo de aviso. */
-  cambiarPassword(actual: string, nueva: string): Promise<SeguridadCuenta>
+  cambiarPassword(actual: string, nueva: string, cerrarOtras?: boolean): Promise<SeguridadCuenta>
+  /** Sesiones abiertas (la de uso más reciente primero). */
+  misSesiones(): Promise<SesionActiva[]>
+  /** Cierra una sesión de otro dispositivo (deja de funcionar en 30 s como máximo). */
+  cerrarSesionRemota(id: number): Promise<void>
+  /** Cierra todas las sesiones menos la de este dispositivo. */
+  cerrarOtrasSesiones(): Promise<{ cerradas: number }>
   /** Reenvía el correo de verificación de la cuenta con sesión (429 si no pasó 1 minuto). */
   reenviarVerificacionSesion(): Promise<SeguridadCuenta>
 

@@ -30,7 +30,7 @@ import java.util.Map;
  */
 @Component
 public class InternalClient {
-    public static final String H_KEY = "X-Internal-Key", H_USUARIO = "X-Usuario-Id", H_ROL = "X-Usuario-Rol";
+    public static final String H_KEY = "X-Internal-Key", H_USUARIO = "X-Usuario-Id", H_ROL = "X-Usuario-Rol", H_SESION = "X-Sesion-Id";
     private final RestClient http;
     private final String key;
     private final ObjectMapper json;
@@ -56,6 +56,7 @@ public class InternalClient {
         RestClient.RequestBodySpec req = http.method(metodo).uri(URI.create(url)).header(H_KEY, key);
         Sesion s = sesionActual();
         if (s != null) req.header(H_USUARIO, String.valueOf(s.usuarioId())).header(H_ROL, s.rol());
+        if (s != null && s.tokenId() != null) req.header(H_SESION, s.tokenId());   // la capa BS sabe cuál es «este dispositivo»
         if (body != null) req.body(body);
         return req.retrieve().onStatus(HttpStatusCode::isError, (pet, res) -> {
             String mensaje = "Error en el servicio";

@@ -20,6 +20,7 @@ export interface PostulacionDB {
   documentos?: (Omit<DocumentoPostulacion, 'requisitoNombre'> & { contenido?: string })[]
 }
 export interface NotificacionDB extends Notificacion { usuarioId: number }
+export interface SesionMockDB { id: number; token: string; usuarioId: number; dispositivo: string; navegador: string; ip: string; creadaAt: string; ultimoUsoAt: string; revocadaAt?: string }
 export interface SuscripcionDB extends Omit<Suscripcion, 'plan' | 'postulacionesUsadas'> { planId: number }
 export interface CorreoDB { id: number; para: string; asunto: string; cuerpo: string; fecha: string; enlace?: string; etiqueta?: string }
 export interface TokenDB { token: string; usuarioId: number; expira: string; usado: boolean; tipo?: 'reset' | 'verificar' }  // sin tipo = reset (datos antiguos)
@@ -40,6 +41,8 @@ export interface DB {
   correos: CorreoDB[]
   tokens: TokenDB[]
   sesiones: Record<string, number>
+  /** Detalle de cada sesión (Configuración > Seguridad): las cerradas salen de «sesiones» y quedan con revocadaAt. */
+  sesionesInfo?: SesionMockDB[]
   configLegal: { urlTerminos: string | null; urlPolitica: string | null; versionTerminos?: string; versionPolitica?: string }
 }
 
@@ -282,6 +285,20 @@ function seed(): DB {
       else if (k === 2 && li % 3 === 0) estado = 'Rechazada'
       db.postulaciones.push({ id: nextId(db, 'postulacion'), licitacionId: l.id, pymeId: pid, mensaje: mensajesTipo[(li + k) % 3], fecha: iso(fecha), estado, adjudicada, updatedAt: iso(fecha) })
     })
+  })
+
+  // Sesiones abiertas en otros dispositivos de las cuentas demo (Configuración > Seguridad > Sesiones).
+  db.sesionesInfo = []
+  const otras: [string, string, string, string, number][] = [
+    ['licitador@demo.cl', 'Android · Celular', 'Chrome', '190.22.15.84', 2], ['licitador@demo.cl', 'macOS · Computador', 'Safari', '181.43.120.7', 26],
+    ['pyme@demo.cl', 'iPhone · Celular', 'Safari', '200.83.4.161', 5], ['premium@demo.cl', 'Windows · Computador', 'Edge', '186.10.77.23', 30],
+  ]
+  otras.forEach(([email, dispositivo, navegador, ip, horas]) => {
+    const u = db.usuarios.find((x) => x.email === email)
+    if (!u) return
+    const token = `tk_demo_${u.id}_${db.sesionesInfo!.length}`
+    db.sesiones[token] = u.id
+    db.sesionesInfo!.push({ id: nextId(db, 'sesion'), token, usuarioId: u.id, dispositivo, navegador, ip, creadaAt: iso(now - (horas + 30) * 3_600_000), ultimoUsoAt: iso(now - horas * 3_600_000) })
   })
 
   // Licitación de bodega (id 1, del licitador demo): 3 postulaciones de hoy, ayer y hace 2 días desde distintas regiones,

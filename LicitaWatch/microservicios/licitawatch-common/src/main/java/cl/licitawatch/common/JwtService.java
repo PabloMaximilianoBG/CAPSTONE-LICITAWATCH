@@ -21,9 +21,10 @@ public class JwtService {
         this.horas = horas;
     }
 
-    public String emitir(long usuarioId, String rol) {
+    /** Token de sesión; tokenId (jti) identifica la sesión registrada en sesion_usuario para poder cerrarla. */
+    public String emitir(long usuarioId, String rol, String tokenId) {
         Date ahora = new Date();
-        return Jwts.builder().subject(String.valueOf(usuarioId)).claim("rol", rol)
+        return Jwts.builder().id(tokenId).subject(String.valueOf(usuarioId)).claim("rol", rol)
                 .issuedAt(ahora).expiration(new Date(ahora.getTime() + horas * 3_600_000L))
                 .signWith(key).compact();
     }
@@ -51,6 +52,9 @@ public class JwtService {
     public Long validarVerificacion(String token) {
         try { Claims c = validar(token); return "VERIFICAR".equals(c.get("rol", String.class)) ? Long.parseLong(c.getSubject()) : null; } catch (Exception e) { return null; }
     }
+
+    /** Horas de vigencia de un token de sesión (lw.jwt.horas). */
+    public long horas() { return horas; }
 
     public Claims validar(String token) {
         return Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();

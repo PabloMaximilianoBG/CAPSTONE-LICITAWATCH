@@ -3,7 +3,8 @@ import type {
   MetodoPago, NuevaLicitacion, Perfil, Plan, Postulacion, PuntoMensual, RegistroLicitador, RegistroOk, RegistroPyme,
   ResumenLicitador, ResumenPyme, SeguridadCuenta, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
-import { ApiError } from '../errors'
+import { ApiError, avisarSesionTerminada } from '../errors'
+import { dispositivoDe, ipParcial, navegadorDe } from '../../lib/dispositivo'
 import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, MAX_REQUERIDOS, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
@@ -25,7 +26,15 @@ function actual(db: DB): Usuario & { password?: string } {
   const t = getToken()
   const id = t ? db.sesiones[t] : undefined
   const u = id ? db.usuarios.find((x) => x.id === id) : undefined
-  if (!u) throw new ApiError('Tu sesión expiró. Inicia sesión nuevamente.', 401)
+  if (!u) {
+    // Como el backend: si el token es de una sesión cerrada, «Tu sesión fue cerrada» y vuelta al login.
+    const cerrada = !!t && (db.sesionesInfo ?? []).some((s) => s.token === t && s.revocadaAt)
+    const mensaje = cerrada ? 'Tu sesión fue cerrada. Inicia sesión nuevamente.' : 'Tu sesión expiró. Inicia sesión nuevamente.'
+    if (t) { setToken(null); avisarSesionTerminada(mensaje) }
+    throw new ApiError(mensaje, 401)
+  }
+  const info = (db.sesionesInfo ?? []).find((s) => s.token === t)
+  if (info) info.ultimoUsoAt = ahora()
   if (!u.activo) throw new ApiError('Tu cuenta está bloqueada. Contacta a soporte.', 403)
   const { password: _p, ...resto } = u
   return resto
@@ -187,6 +196,19 @@ function registrar(db: DB, d: RegistroLicitador, rol: 'LICITADOR' | 'PYME', tama
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+/** Cierra la sesión de un token: deja de valer y queda en el historial con revocadaAt. */
+function revocar(db: DB, token: string) {
+  delete db.sesiones[token]
+  const s = (db.sesionesInfo ?? []).find((x) => x.token === token)
+  if (s && !s.revocadaAt) s.revocadaAt = ahora()
+}
+/** Cierra todas las sesiones del usuario menos la del token indicado; devuelve cuántas cerró. */
+function cerrarOtrasDe(db: DB, usuarioId: number, excepto: string | null): number {
+  const otras = (db.sesionesInfo ?? []).filter((s) => s.usuarioId === usuarioId && !s.revocadaAt && s.token !== excepto)
+  otras.forEach((s) => revocar(db, s.token))
+  return otras.length
+}
+
 /** Último reenvío del correo de verificación por usuario (máximo uno por minuto, como el backend; en memoria). */
 const ultimoReenvio: Record<number, number> = {}
 const esperaReenvio = (id: number) => Math.max(0, Math.ceil(60 - (Date.now() - (ultimoReenvio[id] ?? 0)) / 1000))
@@ -211,6 +233,9 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (!verificado(u)) throw new ApiError('Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.', ERROR_SIN_VERIFICAR)
     const token = 'tk_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
     db.sesiones[token] = u.id
+    db.sesionesInfo ??= []
+    const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+    db.sesionesInfo.push({ id: nextId(db, 'sesion'), token, usuarioId: u.id, dispositivo: dispositivoDe(ua), navegador: navegadorDe(ua), ip: '127.0.0.1', creadaAt: ahora(), ultimoUsoAt: ahora() })
     u.ultimoLogin = ahora()
     saveDb()
     setToken(token)
@@ -228,7 +253,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
   async logout() {
     const db = loadDb()
     const t = getToken()
-    if (t) { delete db.sesiones[t]; saveDb() }
+    if (t) { revocar(db, t); saveDb() }
     setToken(null)
   },
   async registrarLicitador(d) { await delay(700); return registrar(loadDb(), d, 'LICITADOR') },
@@ -256,7 +281,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const db = loadDb()
     return seguridadDe(db, exigir(db, 'LICITADOR', 'PYME').id)
   },
-  async cambiarPassword(actual, nueva) {
+  async cambiarPassword(actual, nueva, cerrarOtras = false) {
     await delay(500)
     const db = loadDb()
     const u = db.usuarios.find((x) => x.id === exigir(db, 'LICITADOR', 'PYME').id)!
@@ -267,9 +292,36 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (nueva === actual) throw new ApiError('La nueva contraseña debe ser distinta de la actual', 400)
     u.password = nueva
     u.passwordActualizadaAt = ahora()
+    if (cerrarOtras) cerrarOtrasDe(db, u.id, getToken())
     correo(db, u.id, 'Tu contraseña de LicitaWatch fue cambiada', `Cambiaste la contraseña de tu cuenta ${u.email} desde Configuración > Seguridad. Desde ahora, inicia sesión con tu nueva contraseña. Si no fuiste tú, usa «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.`, '/login', 'Iniciar sesión')
     saveDb()
     return seguridadDe(db, u.id)
+  },
+  async misSesiones() {
+    await delay(200)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const t = getToken()
+    return (db.sesionesInfo ?? []).filter((s) => s.usuarioId === u.id && !s.revocadaAt)
+      .sort((a, b) => b.ultimoUsoAt.localeCompare(a.ultimoUsoAt))
+      .map((s) => ({ id: s.id, dispositivo: s.dispositivo, navegador: s.navegador, ip: ipParcial(s.ip), creadaAt: s.creadaAt, ultimoUsoAt: s.ultimoUsoAt, actual: s.token === t }))
+  },
+  async cerrarSesionRemota(id) {
+    await delay(300)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const s = (db.sesionesInfo ?? []).find((x) => x.id === id && x.usuarioId === u.id)
+    if (!s) throw new ApiError('Sesión no encontrada', 404)
+    revocar(db, s.token)
+    saveDb()
+  },
+  async cerrarOtrasSesiones() {
+    await delay(300)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const cerradas = cerrarOtrasDe(db, u.id, getToken())
+    saveDb()
+    return { cerradas }
   },
   async reenviarVerificacionSesion() {
     await delay(400)
