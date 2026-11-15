@@ -44,7 +44,9 @@
 .dd-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .dd-empty { padding: 28px; text-align: center; color: var(--muted); }
 .dd-foot { display: block; padding: 12px; text-align: center; font-weight: 600; font-size: 14px; color: var(--accent); border-top: 1px solid var(--border); }
-.dd-user { display: flex; flex-direction: column; padding: 10px 12px 12px; border-bottom: 1px solid var(--border); margin-bottom: 6px; } .dd-user small { color: var(--muted); }
+.dd-user { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 12px 12px; border-bottom: 1px solid var(--border); margin-bottom: 6px; } .dd-user small { color: var(--muted); }
+/* Correos y nombres largos: el menú del usuario es más ancho y el texto corta línea dentro del cuadro en vez de salirse. */
+.user-dd { width: 280px; max-width: calc(100vw - 24px); } .dd-user b, .dd-user small { overflow-wrap: anywhere; }
 .dd-item { display: flex; width: 100%; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-radius: 10px; background: transparent; font-size: 14px; font-weight: 500; text-align: left; }
 .dd-item:hover { background: var(--surface-2); } .dd-item.danger { color: var(--red); } .dd-item.danger:hover { background: var(--red-soft); }
 
