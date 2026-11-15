@@ -17,6 +17,14 @@ public final class Repos {
         boolean existsByEmailIgnoreCase(String email);
         long countByRol_Nombre(String rol);
         long countByActivoFalse();
+        /** Guarda el secreto 2FA pendiente solo si no hay otro (atómico: si llegan dos activaciones a la vez, gana una sola). */
+        @Modifying(clearAutomatically = true) @Query("update Usuario u set u.totpSecretoCifrado = :secreto where u.id = :id and u.totpSecretoCifrado is null")
+        int fijarSecretoSiVacio(@Param("id") Long id, @Param("secreto") String secretoCifrado);
+    }
+    public interface CodigoRecuperacionRepo extends JpaRepository<CodigoRecuperacion, Long> {
+        List<CodigoRecuperacion> findByUsuarioIdAndUsadoAtIsNull(Long usuarioId);
+        long countByUsuarioIdAndUsadoAtIsNull(Long usuarioId);
+        void deleteByUsuarioId(Long usuarioId);
     }
     public interface SesionUsuarioRepo extends JpaRepository<SesionUsuario, Long> {
         Optional<SesionUsuario> findByTokenId(String tokenId);

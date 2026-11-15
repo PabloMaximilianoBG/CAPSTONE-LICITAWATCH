@@ -49,7 +49,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 c = jwt.validar(h.substring(7));
                 String rol = c.get("rol", String.class);
                 // Los tokens de los enlaces del correo (recuperar contraseña y verificar cuenta) no son sesiones.
-                if ("RESET".equals(rol) || "VERIFICAR".equals(rol)) throw new IllegalStateException("token de un solo propósito no es sesión");
+                if ("RESET".equals(rol) || "VERIFICAR".equals(rol) || "2FA".equals(rol)) throw new IllegalStateException("token de un solo propósito no es sesión");
             } catch (Exception e) {
                 c = null;
                 if (!esPublica(path)) { error(res, 401, "Sesión expirada o inválida"); return; }

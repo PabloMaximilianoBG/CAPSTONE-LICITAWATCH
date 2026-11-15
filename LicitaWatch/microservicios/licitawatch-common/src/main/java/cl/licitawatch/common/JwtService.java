@@ -53,6 +53,17 @@ public class JwtService {
         try { Claims c = validar(token); return "VERIFICAR".equals(c.get("rol", String.class)) ? Long.parseLong(c.getSubject()) : null; } catch (Exception e) { return null; }
     }
 
+    /** Token temporal del login con 2FA (rol 2FA: no sirve como sesión). Vence en 5 minutos: solo permite enviar el código. */
+    public String emitirDosPasos(long usuarioId) {
+        Date ahora = new Date();
+        return Jwts.builder().subject(String.valueOf(usuarioId)).claim("rol", "2FA")
+                .issuedAt(ahora).expiration(new Date(ahora.getTime() + 5 * 60_000L)).signWith(key).compact();
+    }
+    /** Devuelve el id de usuario si el token es del paso 2FA y está vigente; si no, null. */
+    public Long validarDosPasos(String token) {
+        try { Claims c = validar(token); return "2FA".equals(c.get("rol", String.class)) ? Long.parseLong(c.getSubject()) : null; } catch (Exception e) { return null; }
+    }
+
     /** Horas de vigencia de un token de sesión (lw.jwt.horas). */
     public long horas() { return horas; }
 

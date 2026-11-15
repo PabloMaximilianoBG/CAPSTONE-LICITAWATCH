@@ -33,6 +33,18 @@ public class AuthController {
         body.put("email", b.email()); body.put("password", b.password()); body.put("userAgent", r.getHeader("User-Agent")); body.put("ip", ipDe(r));
         return post("/bs/auth/login", body);
     }
+    /** Segundo paso del login con 2FA (pública: aún no hay sesión, solo el token temporal de 5 minutos). */
+    @PostMapping("/api/auth/login/2fa")
+    public JsonNode login2fa(HttpServletRequest r, @Valid @RequestBody Login2fa b) {
+        Map<String, Object> body = new java.util.HashMap<>();
+        body.put("tokenTemporal", b.tokenTemporal()); body.put("codigo", b.codigo()); body.put("userAgent", r.getHeader("User-Agent")); body.put("ip", ipDe(r));
+        return post("/bs/auth/login/2fa", body);
+    }
+    // Autenticación de dos factores (opcional, cualquier rol con sesión)
+    @PostMapping("/api/usuarios/2fa/iniciar") public JsonNode iniciar2fa(HttpServletRequest r) { Auth.sesion(r); return post("/bs/usuarios/2fa/iniciar", Map.of()); }
+    @PostMapping("/api/usuarios/2fa/confirmar") public JsonNode confirmar2fa(HttpServletRequest r, @Valid @RequestBody Codigo2fa b) { Auth.sesion(r); return post("/bs/usuarios/2fa/confirmar", b); }
+    @PostMapping("/api/usuarios/2fa/desactivar") public JsonNode desactivar2fa(HttpServletRequest r, @Valid @RequestBody Desactivar2fa b) { Auth.sesion(r); return post("/bs/usuarios/2fa/desactivar", b); }
+
     /** Cierra la sesión actual en el servidor (deja de servir aunque el token no haya vencido). */
     @PostMapping("/api/auth/logout") public Map<String, String> logout(HttpServletRequest r) { Auth.sesion(r); post("/bs/auth/logout", Map.of()); return Map.of("mensaje", "Sesión cerrada"); }
 

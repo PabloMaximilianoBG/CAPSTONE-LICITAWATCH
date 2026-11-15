@@ -1,4 +1,4 @@
-import type { Api, FiltroLicitaciones, FiltroUsuarios, Notificacion } from '../types'
+import { esRequiere2fa, type Api, type FiltroLicitaciones, type FiltroUsuarios, type Notificacion, type Sesion } from '../types'
 import { ApiError, avisarSesionTerminada } from '../errors'
 
 // Implementación real: habla con el API Gateway (Spring Cloud Gateway) en VITE_API_URL.
@@ -46,6 +46,11 @@ const post = <T,>(p: string, b?: unknown) => req<T>('POST', p, b ?? {})
 export const httpApi: Api = {
   async login(email, password) {
     const s = await post<Awaited<ReturnType<Api['login']>>>('/api/auth/login', { email, password })
+    if (!esRequiere2fa(s)) setToken(s.token)   // con 2FA todavía no hay sesión: falta el código
+    return s
+  },
+  async loginDosPasos(tokenTemporal, codigo) {
+    const s = await post<Sesion>('/api/auth/login/2fa', { tokenTemporal, codigo })
     setToken(s.token)
     return s
   },
@@ -73,6 +78,9 @@ export const httpApi: Api = {
   misSesiones: () => get('/api/usuarios/sesiones'),
   async cerrarSesionRemota(id) { await req('DELETE', `/api/usuarios/sesiones/${id}`) },
   cerrarOtrasSesiones: () => post('/api/usuarios/sesiones/cerrar-otras'),
+  iniciar2fa: () => post('/api/usuarios/2fa/iniciar'),
+  confirmar2fa: (codigo) => post('/api/usuarios/2fa/confirmar', { codigo }),
+  desactivar2fa: (password, codigo) => post('/api/usuarios/2fa/desactivar', { password, codigo }),
   reenviarVerificacionSesion: () => post('/api/usuarios/verificacion/reenviar'),
 
   rubros: () => get('/api/catalogos/rubros'),

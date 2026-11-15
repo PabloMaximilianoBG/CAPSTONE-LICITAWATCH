@@ -41,6 +41,11 @@ CREATE TABLE IF NOT EXISTS usuario (                -- 1 rol -> N usuarios
   foto       TEXT,                                  -- foto de perfil (data URL JPEG 256x256); NULL = se muestran las iniciales
   ultimo_login TIMESTAMPTZ,                         -- último inicio de sesión correcto; NULL = nunca ha entrado
   password_actualizada_at TIMESTAMPTZ,              -- último cambio de contraseña; NULL = sin cambios desde el registro
+  totp_activo           BOOLEAN NOT NULL DEFAULT FALSE,   -- 2FA (TOTP) activa: el login pide además el código de la app
+  totp_secreto_cifrado  TEXT,                         -- secreto TOTP cifrado con AES-GCM (clave LW_TOTP_KEY); con totp_activo=FALSE es una activación pendiente
+  totp_activado_at      TIMESTAMPTZ,                  -- cuándo se confirmó la 2FA
+  totp_intentos_fallidos INTEGER NOT NULL DEFAULT 0,  -- códigos incorrectos seguidos (5 = bloqueo de 5 minutos)
+  totp_bloqueado_hasta  TIMESTAMPTZ,                  -- hasta cuándo no se aceptan códigos tras 5 intentos fallidos
   acepta_terminos BOOLEAN NOT NULL DEFAULT TRUE,    -- aceptación obligatoria de Términos y Política al registrarse
   terminos_aceptados_at TIMESTAMPTZ,                -- fecha/hora de aceptación de los documentos legales
   version_terminos VARCHAR(32) NOT NULL DEFAULT '1.0', -- versión aceptada de Términos y Condiciones
@@ -62,6 +67,14 @@ CREATE TABLE IF NOT EXISTS sesion_usuario (         -- 1 usuario -> N sesiones (
   CONSTRAINT uq_sesion_token UNIQUE (token_id)
 );
 CREATE INDEX IF NOT EXISTS ix_sesion_usuario ON sesion_usuario(usuario_id);
+
+CREATE TABLE IF NOT EXISTS usuario_codigo_recuperacion (   -- 1 usuario -> 8 códigos de recuperación de la 2FA (de un solo uso)
+  id           BIGSERIAL PRIMARY KEY,
+  usuario_id   BIGINT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  codigo_hash  VARCHAR(100) NOT NULL,                 -- BCrypt del código (el código en claro solo se muestra una vez)
+  usado_at     TIMESTAMPTZ                            -- NULL = disponible
+);
+CREATE INDEX IF NOT EXISTS ix_codigo_rec_usuario ON usuario_codigo_recuperacion(usuario_id);
 
 CREATE TABLE IF NOT EXISTS config_legal (           -- singleton (id = 1): rutas y versiones vigentes de documentos legales
   id               INTEGER PRIMARY KEY DEFAULT 1,

@@ -6,7 +6,12 @@ import { calcularDv, formatearRut } from '../../lib/rut'
 import { REGIONES, rubroPorNombre, ciudadPorNombre } from './catalogs'
 
 /** passwordActualizadaAt = último cambio de contraseña (vacío = sin cambios desde el registro). */
-export interface UsuarioDB extends Usuario { password: string; passwordActualizadaAt?: string }
+export interface UsuarioDB extends Usuario {
+  password: string; passwordActualizadaAt?: string
+  /** 2FA simulada: en el modo simulado el código válido es siempre 123456. */
+  totpActivo?: boolean; totpPendiente?: boolean; totpActivadoAt?: string; totpIntentos?: number; totpBloqueadoHasta?: string
+  codigosRecuperacion?: { codigo: string; usado?: boolean }[]
+}
 export interface LicitacionDB {
   id: number; licitadorId: number; titulo: string; descripcion: string; rubroId: number; regionId: number
   presupuestoMin?: number; presupuestoMax?: number; maxPostulantes?: number; duracionMeses?: number; imagenUrl?: string

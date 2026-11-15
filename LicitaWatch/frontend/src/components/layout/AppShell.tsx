@@ -272,6 +272,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <div className="dd-user"><b>{perfil.nombreContacto}</b><small>{u.email}</small></div>
                   <Link to="/app/perfil" className="dd-item"><Icon name="user" size={17} />Mi perfil</Link>
                   {u.rol === 'PYME' && <Link to="/app/suscripcion" className="dd-item"><Icon name="crown" size={17} />Mi suscripción</Link>}
+                  {u.rol !== 'ADMIN' && <Link to="/app/configuracion" className="dd-item"><Icon name="settings" size={17} />Configuración</Link>}
                   {u.rol !== 'ADMIN' && <Link to="/app/ayuda" className="dd-item"><Icon name="help" size={17} />Ayuda</Link>}
                   <button className="dd-item danger" onClick={async () => { await logout(); navigate('/', true) }}><Icon name="logout" size={17} />Cerrar sesión</button>
                 </div>

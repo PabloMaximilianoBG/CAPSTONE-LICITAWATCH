@@ -35,6 +35,7 @@ psql -U postgres -d licitawatch_usuarios -f db/migracion_ultimo_login.sql     # 
 psql -U postgres -d licitawatch_usuarios -f db/migracion_terminos_legales.sql # aceptación y versiones de Términos y Política de Privacidad
 psql -U postgres -d licitawatch_usuarios -f db/migracion_seguridad_fase1.sql  # Configuración > Seguridad: fecha del último cambio de contraseña
 psql -U postgres -d licitawatch_usuarios -f db/migracion_seguridad_fase2.sql  # Configuración > Seguridad: sesiones (tabla sesion_usuario)
+psql -U postgres -d licitawatch_usuarios -f db/migracion_seguridad_fase3.sql  # Configuración > Seguridad: 2FA (TOTP) y códigos de recuperación
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_postulacion_archivada.sql  # la Pyme archiva postulaciones (postulacion.archivada)
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_documentos_licitacion.sql  # varios documentos por licitación (tabla documento_licitacion)
 psql -U postgres -d licitawatch_licitaciones -f db/migracion_duracion_licitacion.sql    # duración del contrato en meses (licitacion.duracion_meses)

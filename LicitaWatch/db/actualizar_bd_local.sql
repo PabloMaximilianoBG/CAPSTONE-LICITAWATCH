@@ -16,6 +16,7 @@
 \ir migracion_terminos_legales.sql
 \ir migracion_seguridad_fase1.sql
 \ir migracion_seguridad_fase2.sql
+\ir migracion_seguridad_fase3.sql
 
 \echo '== licitawatch_licitaciones'
 \c licitawatch_licitaciones

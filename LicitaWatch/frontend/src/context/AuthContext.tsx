@@ -2,12 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from '../api'
 import { EVENTO_SESION, type MotivoSesion } from '../api/errors'
 import { navigate } from '../lib/router'
-import type { Catalogo, Ciudad, Perfil, Sesion, Usuario } from '../api/types'
+import { esRequiere2fa, type Catalogo, type Ciudad, type Perfil, type Requiere2fa, type Sesion, type Usuario } from '../api/types'
 
 interface AuthState {
   sesion: Sesion | null
   cargando: boolean
-  login: (email: string, password: string) => Promise<Sesion>
+  /** Con 2FA devuelve Requiere2fa (aún sin sesión); la sesión se abre con loginDosPasos. */
+  login: (email: string, password: string) => Promise<Sesion | Requiere2fa>
+  loginDosPasos: (tokenTemporal: string, codigo: string) => Promise<Sesion>
   logout: () => Promise<void>
   setSesion: (s: Sesion | null) => void
   actualizarPerfil: (p: Perfil) => void
@@ -36,6 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const s = await api.login(email, password)
+    if (!esRequiere2fa(s)) setSesion(s)
+    return s
+  }, [])
+  const loginDosPasos = useCallback(async (tokenTemporal: string, codigo: string) => {
+    const s = await api.loginDosPasos(tokenTemporal, codigo)
     setSesion(s)
     return s
   }, [])
@@ -46,7 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const actualizarPerfil = useCallback((p: Perfil) => setSesion((s) => (s ? { ...s, perfil: p } : s)), [])
   const actualizarUsuario = useCallback((u: Usuario) => setSesion((s) => (s ? { ...s, usuario: u } : s)), [])
 
-  const value = useMemo(() => ({ sesion, cargando, login, logout, setSesion, actualizarPerfil, actualizarUsuario }), [sesion, cargando, login, logout, actualizarPerfil, actualizarUsuario])
+  const value = useMemo(() => ({ sesion, cargando, login, loginDosPasos, logout, setSesion, actualizarPerfil, actualizarUsuario }),
+    [sesion, cargando, login, loginDosPasos, logout, actualizarPerfil, actualizarUsuario])
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 

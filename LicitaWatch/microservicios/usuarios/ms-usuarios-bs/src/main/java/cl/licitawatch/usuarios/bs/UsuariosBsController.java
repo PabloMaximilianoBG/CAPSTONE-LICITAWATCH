@@ -25,7 +25,11 @@ public class UsuariosBsController {
     private final SesionService sesiones;
 
     // ---------- autenticación ----------
-    @PostMapping("/auth/login") public SesionDto login(@RequestBody Login b) { return auth.login(b.email(), b.password(), b.userAgent(), b.ip()); }
+    @PostMapping("/auth/login") public Object login(@RequestBody Login b) { return auth.login(b.email(), b.password(), b.userAgent(), b.ip()); }
+    @PostMapping("/auth/login/2fa") public SesionDto login2fa(@RequestBody Login2fa b) { return auth.loginDosPasos(b.tokenTemporal(), b.codigo(), b.userAgent(), b.ip()); }
+    @PostMapping("/usuarios/2fa/iniciar") public cl.licitawatch.usuarios.bs.dosfactores.DosFactoresService.Configuracion2fa iniciar2fa(HttpServletRequest r) { return auth.iniciar2fa(Auth.sesion(r).usuarioId()); }
+    @PostMapping("/usuarios/2fa/confirmar") public Activacion2faDto confirmar2fa(HttpServletRequest r, @RequestBody Codigo2fa b) { return auth.confirmar2fa(Auth.sesion(r).usuarioId(), b.codigo()); }
+    @PostMapping("/usuarios/2fa/desactivar") public SeguridadDto desactivar2fa(HttpServletRequest r, @RequestBody Desactivar2fa b) { return auth.desactivar2fa(Auth.sesion(r).usuarioId(), b.password(), b.codigo()); }
     @PostMapping("/auth/logout") public void logout(HttpServletRequest r) { sesiones.cerrarToken(Auth.sesion(r).tokenId()); }
     @GetMapping("/auth/me") public SesionDto me(HttpServletRequest r) { return auth.me(Auth.sesion(r).usuarioId()); }
     @PostMapping("/auth/recuperar") public void recuperar(@RequestBody Recuperar b) { auth.solicitarRecuperacion(b.email()); }

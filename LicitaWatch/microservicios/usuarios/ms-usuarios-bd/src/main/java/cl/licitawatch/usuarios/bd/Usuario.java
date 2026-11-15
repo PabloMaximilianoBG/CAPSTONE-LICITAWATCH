@@ -17,6 +17,12 @@ public class Usuario {
     @Column(columnDefinition = "TEXT") private String foto;   // foto de perfil: data URL JPEG 256x256 (null = iniciales)
     @Column(name = "ultimo_login") private Instant ultimoLogin;   // último inicio de sesión correcto (null = nunca)
     @Column(name = "password_actualizada_at") private Instant passwordActualizadaAt;   // último cambio de contraseña (null = sin cambios desde el registro)
+    // 2FA (TOTP): secreto cifrado con AES-GCM en la capa BS; con totpActivo=false y secreto != null es una activación pendiente.
+    @Column(name = "totp_activo", nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT FALSE") private boolean totpActivo;
+    @Column(name = "totp_secreto_cifrado", columnDefinition = "TEXT") private String totpSecretoCifrado;
+    @Column(name = "totp_activado_at") private Instant totpActivadoAt;
+    @Column(name = "totp_intentos_fallidos", nullable = false, columnDefinition = "INTEGER NOT NULL DEFAULT 0") private int totpIntentosFallidos;
+    @Column(name = "totp_bloqueado_hasta") private Instant totpBloqueadoHasta;
     @Column(name = "acepta_terminos", nullable = false, columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE") private boolean aceptaTerminos = true;
     @Column(name = "terminos_aceptados_at") private Instant terminosAceptadosAt;
     @Column(name = "version_terminos", nullable = false, length = 32, columnDefinition = "VARCHAR(32) NOT NULL DEFAULT '1.0'") private String versionTerminos = "1.0";
@@ -33,6 +39,11 @@ public class Usuario {
     public String getFoto() { return foto; } public void setFoto(String foto) { this.foto = foto; }
     public Instant getUltimoLogin() { return ultimoLogin; } public void setUltimoLogin(Instant t) { this.ultimoLogin = t; }
     public Instant getPasswordActualizadaAt() { return passwordActualizadaAt; } public void setPasswordActualizadaAt(Instant t) { this.passwordActualizadaAt = t; }
+    public boolean isTotpActivo() { return totpActivo; } public void setTotpActivo(boolean v) { totpActivo = v; }
+    public String getTotpSecretoCifrado() { return totpSecretoCifrado; } public void setTotpSecretoCifrado(String v) { totpSecretoCifrado = v; }
+    public Instant getTotpActivadoAt() { return totpActivadoAt; } public void setTotpActivadoAt(Instant v) { totpActivadoAt = v; }
+    public int getTotpIntentosFallidos() { return totpIntentosFallidos; } public void setTotpIntentosFallidos(int v) { totpIntentosFallidos = v; }
+    public Instant getTotpBloqueadoHasta() { return totpBloqueadoHasta; } public void setTotpBloqueadoHasta(Instant v) { totpBloqueadoHasta = v; }
     public boolean isAceptaTerminos() { return aceptaTerminos; } public void setAceptaTerminos(boolean a) { this.aceptaTerminos = a; }
     public Instant getTerminosAceptadosAt() { return terminosAceptadosAt; } public void setTerminosAceptadosAt(Instant t) { this.terminosAceptadosAt = t; }
     public String getVersionTerminos() { return versionTerminos; } public void setVersionTerminos(String v) { this.versionTerminos = v; }

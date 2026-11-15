@@ -2,6 +2,7 @@ server.port: ${PORT:8181}
 spring:
   application.name: ms-usuarios-bs
 lw:
+  totp.key: ${LW_TOTP_KEY:}   # clave AES-GCM del secreto 2FA (Base64 de 32 bytes). Vacía = clave de desarrollo (ver correo.env.example)
   jwt.secret: ${JWT_SECRET:cambia-este-secreto-de-al-menos-32-caracteres-licitawatch}
   internal-key: ${INTERNAL_KEY:clave-interna-dev}
   urls:
