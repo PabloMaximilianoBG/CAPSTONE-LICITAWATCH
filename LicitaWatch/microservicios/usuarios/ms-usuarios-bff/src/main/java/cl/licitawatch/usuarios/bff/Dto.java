@@ -7,7 +7,10 @@ public final class Dto {
     private Dto() {}
     public record Login(@NotBlank String email, @NotBlank String password) {}
     public record Recuperar(@NotBlank String email) {}
-    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva) {}
+    public record Login2fa(@NotBlank String tokenTemporal, @NotBlank(message = "Ingresa el código") String codigo) {}
+    public record Codigo2fa(@NotBlank(message = "Ingresa el código de 6 dígitos") String codigo) {}
+    public record Desactivar2fa(@NotBlank(message = "Ingresa tu contraseña") String password, @NotBlank(message = "Ingresa un código") String codigo) {}
+    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva, boolean cerrarOtras) {}
     public record Restablecer(@NotBlank String token, @NotBlank String password) {}
     public record Verificar(@NotBlank String token) {}
     public record Estado(boolean activo) {}

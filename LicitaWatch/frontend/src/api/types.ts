@@ -60,6 +60,47 @@ export interface SeguridadCuenta {
   miembroDesde: string
   /** Segundos que faltan para poder reenviar el correo de verificación (máximo uno por minuto). */
   reenvioDisponibleEn: number
+  /** Autenticación de dos factores (TOTP). */
+  dosFactoresActivo: boolean
+  dosFactoresDesde?: string
+  /** Códigos de recuperación sin usar (0 si la 2FA no está activa). */
+  codigosRecuperacion: number
+}
+
+/** Respuesta del login cuando la cuenta tiene 2FA: hay que enviar el código con loginDosPasos antes de 5 minutos. */
+export interface Requiere2fa {
+  requiere2fa: true
+  tokenTemporal: string
+  email: string
+}
+export const esRequiere2fa = (r: Sesion | Requiere2fa): r is Requiere2fa => 'requiere2fa' in r && r.requiere2fa === true
+
+/** Paso 1 de la activación de 2FA: QR de vinculación (data URL PNG), clave manual y enlaces/QR de Google Authenticator. */
+export interface Configuracion2fa {
+  clave: string
+  otpauthUri: string
+  qr?: string
+  urlAndroid: string
+  qrAndroid?: string
+  urlIos: string
+  qrIos?: string
+}
+
+/** Paso 3 de la activación: los códigos de recuperación se muestran solo esta vez. */
+export interface Activacion2fa {
+  codigosRecuperacion: string[]
+  seguridad: SeguridadCuenta
+}
+
+/** Sesión abierta del usuario (Configuración > Seguridad). ip parcial (sin el último octeto); actual = este dispositivo. */
+export interface SesionActiva {
+  id: number
+  dispositivo: string
+  navegador: string
+  ip: string
+  creadaAt: string
+  ultimoUsoAt: string
+  actual: boolean
 }
 
 export interface Sesion {
@@ -462,7 +503,10 @@ export interface ConfigLegal {
 
 export interface Api {
   // Autenticación
-  login(email: string, password: string): Promise<Sesion>
+  /** Si la cuenta tiene 2FA devuelve Requiere2fa (sin sesión todavía): el código se envía con loginDosPasos. */
+  login(email: string, password: string): Promise<Sesion | Requiere2fa>
+  /** Segundo paso del login con 2FA: código de la app (6 dígitos) o de recuperación (XXXX-XXXX). 429 tras 5 intentos fallidos. */
+  loginDosPasos(tokenTemporal: string, codigo: string): Promise<Sesion>
   sesionActual(): Promise<Sesion | null>
   logout(): Promise<void>
   registrarLicitador(d: RegistroLicitador): Promise<RegistroOk>
@@ -479,7 +523,19 @@ export interface Api {
   // Configuración > Seguridad (Licitador y Pyme)
   seguridadCuenta(): Promise<SeguridadCuenta>
   /** 400 si la actual no coincide, si la nueva no cumple las reglas o si es igual a la actual. Envía un correo de aviso. */
-  cambiarPassword(actual: string, nueva: string): Promise<SeguridadCuenta>
+  cambiarPassword(actual: string, nueva: string, cerrarOtras?: boolean): Promise<SeguridadCuenta>
+  /** Sesiones abiertas (la de uso más reciente primero). */
+  misSesiones(): Promise<SesionActiva[]>
+  /** Cierra una sesión de otro dispositivo (deja de funcionar en 30 s como máximo). */
+  cerrarSesionRemota(id: number): Promise<void>
+  /** Cierra todas las sesiones menos la de este dispositivo. */
+  cerrarOtrasSesiones(): Promise<{ cerradas: number }>
+  /** 2FA paso 1: genera la clave (pendiente hasta confirmar) y los QR. */
+  iniciar2fa(): Promise<Configuracion2fa>
+  /** 2FA paso 2: confirma con el código de la app; devuelve los 8 códigos de recuperación (paso 3). */
+  confirmar2fa(codigo: string): Promise<Activacion2fa>
+  /** Desactiva la 2FA: contraseña y un código vigente (de la app o de recuperación). */
+  desactivar2fa(password: string, codigo: string): Promise<SeguridadCuenta>
   /** Reenvía el correo de verificación de la cuenta con sesión (429 si no pasó 1 minuto). */
   reenviarVerificacionSesion(): Promise<SeguridadCuenta>
 

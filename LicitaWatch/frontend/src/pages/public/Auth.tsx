@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, USE_MOCK, mockApi } from '../../api'
 import { ApiError } from '../../api/errors'
-import { ERROR_SIN_VERIFICAR } from '../../api/types'
+import { ERROR_SIN_VERIFICAR, esRequiere2fa, type Requiere2fa } from '../../api/types'
 import { Link, navigate, tomarDestino, useLocation } from '../../lib/router'
 import { Logo } from '../../components/layout/Logo'
 import { LoginEnVivo } from '../../components/layout/EscenasAuth'
@@ -20,11 +20,12 @@ const DEMOS = [
 ]
 
 export function Login() {
-  const { login } = useAuth()
+  const { login, loginDosPasos } = useAuth()
   const toast = useToast()
   const { search } = useLocation()
   const recienVerificada = search.get('verificada') === '1'
   const passwordCambiada = search.get('password') === '1'   // viene de Configuración > Seguridad tras cambiar la contraseña
+  const sesionTerminada = search.get('sesion')   // «cerrada» (desde otro dispositivo) o «expirada»
   const [email, setEmail] = useState(search.get('email') ?? '')
   const [pass, setPass] = useState('')
   const [ver, setVer] = useState(false)
@@ -32,12 +33,18 @@ export function Login() {
   const [error, setError] = useState('')
   const [sinVerificar, setSinVerificar] = useState(false)
   const [reenviando, setReenviando] = useState(false)
+  const [pendiente2fa, setPendiente2fa] = useState<Requiere2fa | null>(null)   // la cuenta tiene 2FA: falta el código
 
   const reenviar = async () => {
     setReenviando(true)
     try { await api.reenviarVerificacion(email); toast.ok('Te enviamos un nuevo enlace de verificación.') }
     catch (err) { toast.error((err as Error).message) }
     finally { setReenviando(false) }
+  }
+
+  const entrar = () => {
+    toast.ok('¡Bienvenido de vuelta!')
+    if (window.location.pathname === '/login') navigate(tomarDestino() ?? '/app', true)   // vuelve a la página que se quiso abrir (p. ej. el enlace de un correo)
   }
 
   const enviar = async (e?: FormEvent, creds?: { email: string; pass: string }) => {
@@ -48,9 +55,9 @@ export function Login() {
     if (!pw) { setError('Ingresa tu contraseña'); return }
     setError(''); setSinVerificar(false); setCargando(true)
     try {
-      await login(em, pw)
-      toast.ok('¡Bienvenido de vuelta!')
-      if (window.location.pathname === '/login') navigate(tomarDestino() ?? '/app', true)   // vuelve a la página que se quiso abrir (p. ej. el enlace de un correo)
+      const r = await login(em, pw)
+      if (esRequiere2fa(r)) { setPendiente2fa(r); setPass(''); return }
+      entrar()
     } catch (err) {
       setError((err as Error).message)
       setSinVerificar(err instanceof ApiError && err.status === ERROR_SIN_VERIFICAR)
@@ -77,6 +84,11 @@ export function Login() {
           <p className="auth-sub">Ingresa tus credenciales para acceder a tu panel.</p>
           {recienVerificada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />¡Tu cuenta fue verificada! Ya puedes iniciar sesión.</div>}
           {passwordCambiada && <div className="alert alert-ok"><Icon name="checkcircle" size={18} />Cambiaste tu contraseña. Inicia sesión con la nueva.</div>}
+          {sesionTerminada && <div className="alert alert-warn"><Icon name="lock" size={18} />{sesionTerminada === 'cerrada' ? 'Tu sesión fue cerrada. Inicia sesión nuevamente.' : 'Tu sesión expiró. Inicia sesión nuevamente.'}</div>}
+          {pendiente2fa ? (
+            <PasoCodigo2fa pendiente={pendiente2fa} onCancelar={() => setPendiente2fa(null)}
+              onCodigo={async (codigo) => { await loginDosPasos(pendiente2fa.tokenTemporal, codigo); entrar() }} />
+          ) : <>
           <form onSubmit={(e) => enviar(e)} noValidate>
             <Field label="Correo electrónico" required><Input icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@correo.cl" autoComplete="email" autoFocus /></Field>
             <Field label="Contraseña" required>
@@ -96,6 +108,7 @@ export function Login() {
             <Button type="submit" size="lg" block loading={cargando} iconRight="arrowright">Iniciar sesión</Button>
           </form>
           <p className="auth-foot">¿Aún no tienes cuenta? <Link to="/registro">Regístrate gratis</Link></p>
+          </>}
 
           {USE_MOCK && (
             <div className="demo-box">
@@ -297,5 +310,48 @@ export function Bandeja() {
         </div>
       </section>
     </PublicPage>
+  )
+}
+
+/** Segundo paso del login con 2FA: código de 6 dígitos de la app, o un código de recuperación (XXXX-XXXX). El token temporal dura 5 minutos. */
+function PasoCodigo2fa({ pendiente, onCodigo, onCancelar }: { pendiente: Requiere2fa; onCodigo: (codigo: string) => Promise<void>; onCancelar: () => void }) {
+  const [recuperacion, setRecuperacion] = useState(false)
+  const [codigo, setCodigo] = useState('')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const valido = recuperacion ? codigo.replace(/[^A-Za-z0-9]/g, '').length === 8 : /^\d{6}$/.test(codigo)
+  const enviar = async (e?: FormEvent) => {
+    e?.preventDefault()
+    if (!valido) { setError(recuperacion ? 'El código de recuperación tiene 8 caracteres (XXXX-XXXX).' : 'Ingresa los 6 dígitos que muestra tu aplicación.'); return }
+    setError(''); setEnviando(true)
+    try { await onCodigo(codigo) }
+    catch (err) {
+      const m = (err as Error).message
+      setError(m); setCodigo('')
+      if (err instanceof ApiError && err.status === 401) setTimeout(onCancelar, 2500)   // pasaron los 5 minutos: vuelve a pedir la contraseña
+    } finally { setEnviando(false) }
+  }
+  return (
+    <form onSubmit={enviar} noValidate className="dosf-login">
+      <div className="alert alert-ok"><Icon name="shield" size={18} />Tu cuenta tiene verificación en dos pasos ({pendiente.email}).</div>
+      {recuperacion ? (
+        <Field label="Código de recuperación" required hint="Uno de los 8 códigos que guardaste al activar la verificación. Cada uno sirve una sola vez.">
+          <Input icon="lock" value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase().slice(0, 9))} placeholder="XXXX-XXXX" autoComplete="one-time-code" autoFocus />
+        </Field>
+      ) : (
+        <Field label="Código de 6 dígitos" required hint="Ábrelo en tu aplicación de autenticación (Google Authenticator u otra). Cambia cada 30 segundos.">
+          <Input className="dosf-codigo" icon="shield" inputMode="numeric" value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="000000" autoComplete="one-time-code" autoFocus />
+        </Field>
+      )}
+      {error && <div className="alert alert-err"><Icon name="alert" size={18} />{error}</div>}
+      <Button type="submit" size="lg" block loading={enviando} disabled={!valido} iconRight="arrowright">Verificar e ingresar</Button>
+      <div className="dosf-login-links">
+        <button type="button" className="link-btn" onClick={() => { setRecuperacion(!recuperacion); setCodigo(''); setError('') }}>
+          {recuperacion ? 'Usar el código de mi aplicación' : '¿No tienes tu teléfono? Usa un código de recuperación'}
+        </button>
+        <button type="button" className="link-btn" onClick={onCancelar}>Volver</button>
+      </div>
+    </form>
   )
 }

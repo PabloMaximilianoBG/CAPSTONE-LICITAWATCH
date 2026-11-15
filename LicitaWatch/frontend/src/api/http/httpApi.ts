@@ -1,5 +1,5 @@
-import type { Api, FiltroLicitaciones, FiltroUsuarios, Notificacion } from '../types'
-import { ApiError } from '../errors'
+import { esRequiere2fa, type Api, type FiltroLicitaciones, type FiltroUsuarios, type Notificacion, type Sesion } from '../types'
+import { ApiError, avisarSesionTerminada } from '../errors'
 
 // Implementación real: habla con el API Gateway (Spring Cloud Gateway) en VITE_API_URL.
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8080'
@@ -30,7 +30,11 @@ async function req<T>(method: string, path: string, body?: unknown, query?: Reco
   const text = await res.text()
   const data = text ? JSON.parse(text) : undefined
   if (!res.ok) {
-    if (res.status === 401) setToken(null)
+    if (res.status === 401) {
+      setToken(null)
+      // Con sesión (no en el login): el servidor la cerró o venció → aviso global y vuelta al login.
+      if (t && !path.startsWith('/api/auth/login')) avisarSesionTerminada((data && data.mensaje) || '')
+    }
     throw new ApiError((data && (data.mensaje || data.message)) || `Error ${res.status}`, res.status)
   }
   return data as T
@@ -42,6 +46,11 @@ const post = <T,>(p: string, b?: unknown) => req<T>('POST', p, b ?? {})
 export const httpApi: Api = {
   async login(email, password) {
     const s = await post<Awaited<ReturnType<Api['login']>>>('/api/auth/login', { email, password })
+    if (!esRequiere2fa(s)) setToken(s.token)   // con 2FA todavía no hay sesión: falta el código
+    return s
+  },
+  async loginDosPasos(tokenTemporal, codigo) {
+    const s = await post<Sesion>('/api/auth/login/2fa', { tokenTemporal, codigo })
     setToken(s.token)
     return s
   },
@@ -49,7 +58,11 @@ export const httpApi: Api = {
     if (!getToken()) return null
     try { return await get('/api/auth/me') } catch { setToken(null); return null }
   },
-  async logout() { setToken(null) },
+  async logout() {
+    // Se cierra también en el servidor; si ya estaba cerrada o el backend no responde, igual se sale.
+    if (getToken()) { try { await post('/api/auth/logout') } catch { /* nada */ } }
+    setToken(null)
+  },
   registrarLicitador: (d) => post('/api/usuarios/registro/licitador', d),
   registrarPyme: (d) => post('/api/usuarios/registro/pyme', d),
   async verificarCuenta(token) { await post('/api/auth/verificar', { token }) },
@@ -61,7 +74,13 @@ export const httpApi: Api = {
   async solicitarRecuperacion(email) { await post('/api/auth/recuperar', { email }) },
   async restablecerPassword(token, password) { await post('/api/auth/restablecer', { token, password }) },
   seguridadCuenta: () => get('/api/usuarios/seguridad'),
-  cambiarPassword: (actual, nueva) => req('PUT', '/api/usuarios/password', { actual, nueva }),
+  cambiarPassword: (actual, nueva, cerrarOtras = false) => req('PUT', '/api/usuarios/password', { actual, nueva, cerrarOtras }),
+  misSesiones: () => get('/api/usuarios/sesiones'),
+  async cerrarSesionRemota(id) { await req('DELETE', `/api/usuarios/sesiones/${id}`) },
+  cerrarOtrasSesiones: () => post('/api/usuarios/sesiones/cerrar-otras'),
+  iniciar2fa: () => post('/api/usuarios/2fa/iniciar'),
+  confirmar2fa: (codigo) => post('/api/usuarios/2fa/confirmar', { codigo }),
+  desactivar2fa: (password, codigo) => post('/api/usuarios/2fa/desactivar', { password, codigo }),
   reenviarVerificacionSesion: () => post('/api/usuarios/verificacion/reenviar'),
 
   rubros: () => get('/api/catalogos/rubros'),

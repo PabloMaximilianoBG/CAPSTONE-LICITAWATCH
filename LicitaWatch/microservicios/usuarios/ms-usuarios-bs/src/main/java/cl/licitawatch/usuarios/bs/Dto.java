@@ -2,18 +2,31 @@ package cl.licitawatch.usuarios.bs;
 
 import jakarta.validation.constraints.*;
 import java.time.Instant;
+import java.util.List;
 
 /** Contratos JSON de la capa BS; el BFF los entrega tal cual al front (coinciden con src/api/types.ts). */
 public final class Dto {
     private Dto() {}
-    public record Login(@NotBlank String email, @NotBlank String password) {}
+    /** userAgent e ip los agrega el BFF (de la petición del navegador) para registrar la sesión. */
+    public record Login(@NotBlank String email, @NotBlank String password, String userAgent, String ip) {}
+    /** Sesión abierta del usuario (Configuración > Seguridad). ip = parcial; actual = la de este dispositivo. */
+    public record SesionActivaDto(Long id, String dispositivo, String navegador, String ip, Instant creadaAt, Instant ultimoUsoAt, boolean actual) {}
     public record Recuperar(@NotBlank String email) {}
-    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva) {}
+    /** cerrarOtras = cerrar además las otras sesiones abiertas del usuario. */
+    public record CambioPassword(@NotBlank String actual, @NotBlank String nueva, boolean cerrarOtras) {}
     /**
      * Configuración > Seguridad: passwordActualizadaAt null = sin cambios desde el registro; plan solo para Pymes (Estándar o Premium);
      * reenvioDisponibleEn = segundos que faltan para poder reenviar el correo de verificación (0 = ya se puede).
      */
-    public record SeguridadDto(String email, Instant passwordActualizadaAt, boolean emailVerificado, boolean activo, String plan, Instant miembroDesde, long reenvioDisponibleEn) {}
+    public record SeguridadDto(String email, Instant passwordActualizadaAt, boolean emailVerificado, boolean activo, String plan, Instant miembroDesde, long reenvioDisponibleEn,
+                               boolean dosFactoresActivo, Instant dosFactoresDesde, long codigosRecuperacion) {}
+    /** Respuesta del login cuando la cuenta tiene 2FA: tokenTemporal (5 min) solo sirve para enviar el código a /auth/login/2fa. */
+    public record Requiere2faDto(boolean requiere2fa, String tokenTemporal, String email) {}
+    public record Login2fa(@NotBlank String tokenTemporal, @NotBlank String codigo, String userAgent, String ip) {}
+    public record Codigo2fa(@NotBlank String codigo) {}
+    public record Desactivar2fa(@NotBlank String password, @NotBlank String codigo) {}
+    /** Paso 3 de la activación: los 8 códigos de recuperación se muestran solo esta vez. */
+    public record Activacion2faDto(List<String> codigosRecuperacion, SeguridadDto seguridad) {}
     public record Restablecer(@NotBlank String token, @NotBlank String password) {}
     public record Verificar(@NotBlank String token) {}
     /** Respuesta del registro: la cuenta queda sin verificar y no se inicia sesión. */

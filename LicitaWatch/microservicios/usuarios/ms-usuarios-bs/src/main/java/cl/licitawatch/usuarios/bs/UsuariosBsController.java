@@ -2,6 +2,7 @@ package cl.licitawatch.usuarios.bs;
 
 import cl.licitawatch.common.ApiException;
 import cl.licitawatch.common.Auth;
+import cl.licitawatch.common.Sesion;
 import cl.licitawatch.usuarios.ambassador.SiiAmbassador;
 import cl.licitawatch.usuarios.ambassador.SiiAmbassador.ConsultaSii;
 import cl.licitawatch.usuarios.bs.Dto.*;
@@ -18,12 +19,18 @@ import java.util.Map;
 @RequestMapping("/bs")
 public class UsuariosBsController {
     private final AuthService auth; private final RegistroService registro; private final AdminService admin; private final UsuariosBd bd; private final SiiAmbassador sii;
-    public UsuariosBsController(AuthService auth, RegistroService registro, AdminService admin, UsuariosBd bd, SiiAmbassador sii) {
-        this.auth = auth; this.registro = registro; this.admin = admin; this.bd = bd; this.sii = sii;
+    public UsuariosBsController(AuthService auth, RegistroService registro, AdminService admin, UsuariosBd bd, SiiAmbassador sii, SesionService sesiones) {
+        this.auth = auth; this.registro = registro; this.admin = admin; this.bd = bd; this.sii = sii; this.sesiones = sesiones;
     }
+    private final SesionService sesiones;
 
     // ---------- autenticación ----------
-    @PostMapping("/auth/login") public SesionDto login(@RequestBody Login b) { return auth.login(b.email(), b.password()); }
+    @PostMapping("/auth/login") public Object login(@RequestBody Login b) { return auth.login(b.email(), b.password(), b.userAgent(), b.ip()); }
+    @PostMapping("/auth/login/2fa") public SesionDto login2fa(@RequestBody Login2fa b) { return auth.loginDosPasos(b.tokenTemporal(), b.codigo(), b.userAgent(), b.ip()); }
+    @PostMapping("/usuarios/2fa/iniciar") public cl.licitawatch.usuarios.bs.dosfactores.DosFactoresService.Configuracion2fa iniciar2fa(HttpServletRequest r) { return auth.iniciar2fa(Auth.sesion(r).usuarioId()); }
+    @PostMapping("/usuarios/2fa/confirmar") public Activacion2faDto confirmar2fa(HttpServletRequest r, @RequestBody Codigo2fa b) { return auth.confirmar2fa(Auth.sesion(r).usuarioId(), b.codigo()); }
+    @PostMapping("/usuarios/2fa/desactivar") public SeguridadDto desactivar2fa(HttpServletRequest r, @RequestBody Desactivar2fa b) { return auth.desactivar2fa(Auth.sesion(r).usuarioId(), b.password(), b.codigo()); }
+    @PostMapping("/auth/logout") public void logout(HttpServletRequest r) { sesiones.cerrarToken(Auth.sesion(r).tokenId()); }
     @GetMapping("/auth/me") public SesionDto me(HttpServletRequest r) { return auth.me(Auth.sesion(r).usuarioId()); }
     @PostMapping("/auth/recuperar") public void recuperar(@RequestBody Recuperar b) { auth.solicitarRecuperacion(b.email()); }
     @PostMapping("/auth/restablecer") public void restablecer(@RequestBody Restablecer b) { auth.restablecer(b.token(), b.password()); }
@@ -41,7 +48,13 @@ public class UsuariosBsController {
     @GetMapping("/usuarios/disponibilidad/rut-persona") public Disponible rutPersona(@RequestParam String valor) { return new Disponible(registro.rutPersonaDisponible(valor)); }
 
     @GetMapping("/usuarios/seguridad") public SeguridadDto seguridad(HttpServletRequest r) { return auth.seguridad(Auth.sesion(r).usuarioId()); }
-    @PutMapping("/usuarios/password") public SeguridadDto password(HttpServletRequest r, @RequestBody CambioPassword b) { return auth.cambiarPassword(Auth.sesion(r).usuarioId(), b.actual(), b.nueva()); }
+    @PutMapping("/usuarios/password")
+    public SeguridadDto password(HttpServletRequest r, @RequestBody CambioPassword b) { Sesion s = Auth.sesion(r); return auth.cambiarPassword(s.usuarioId(), b.actual(), b.nueva(), b.cerrarOtras(), s.tokenId()); }
+    @GetMapping("/usuarios/sesiones") public List<SesionActivaDto> sesiones(HttpServletRequest r) { Sesion s = Auth.sesion(r); return sesiones.listar(s.usuarioId(), s.tokenId()); }
+    @DeleteMapping("/usuarios/sesiones/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void cerrarSesion(HttpServletRequest r, @PathVariable long id) { sesiones.cerrar(Auth.sesion(r).usuarioId(), id); }
+    @PostMapping("/usuarios/sesiones/cerrar-otras")
+    public Map<String, Integer> cerrarOtras(HttpServletRequest r) { Sesion s = Auth.sesion(r); return Map.of("cerradas", sesiones.cerrarOtras(s.usuarioId(), s.tokenId())); }
     @PostMapping("/usuarios/verificacion/reenviar") public SeguridadDto reenviarSesion(HttpServletRequest r) { return auth.reenviarVerificacionSesion(Auth.sesion(r).usuarioId()); }
     @PutMapping("/usuarios/foto") public UsuarioDto foto(HttpServletRequest r, @RequestBody Foto b) { return auth.actualizarFoto(Auth.sesion(r).usuarioId(), b.foto()); }
     @DeleteMapping("/usuarios/foto") public UsuarioDto quitarFoto(HttpServletRequest r) { return auth.actualizarFoto(Auth.sesion(r).usuarioId(), null); }

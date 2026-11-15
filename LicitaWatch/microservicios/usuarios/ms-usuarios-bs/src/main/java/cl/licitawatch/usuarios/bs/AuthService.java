@@ -3,7 +3,12 @@ package cl.licitawatch.usuarios.bs;
 import cl.licitawatch.common.ApiException;
 import cl.licitawatch.common.InternalClient;
 import cl.licitawatch.common.JwtService;
+import cl.licitawatch.usuarios.bs.Dto.Activacion2faDto;
+import cl.licitawatch.usuarios.bs.Dto.Requiere2faDto;
 import cl.licitawatch.usuarios.bs.Dto.SeguridadDto;
+import cl.licitawatch.usuarios.bs.dosfactores.DosFactoresService;
+import cl.licitawatch.usuarios.bs.dosfactores.DosFactoresService.Configuracion2fa;
+import cl.licitawatch.usuarios.bs.dosfactores.DosFactoresService.TotpFila;
 import cl.licitawatch.usuarios.bs.Dto.SesionDto;
 import cl.licitawatch.usuarios.bs.Dto.UsuarioDto;
 import cl.licitawatch.usuarios.bs.UsuariosBd.UsuarioFila;
@@ -14,6 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -21,16 +27,16 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AuthService {
     private final UsuariosBd bd;
-    private final JwtService jwt; private final InternalClient interno;
+    private final JwtService jwt; private final InternalClient interno; private final SesionService sesiones; private final DosFactoresService dosFactores;
     private final BCryptPasswordEncoder enc = new BCryptPasswordEncoder();
     private final String urlNotif, urlVentas, appUrl;
     /** Último envío del correo de verificación por usuario: máximo uno por minuto (en memoria; se reinicia con el servicio). */
     private final Map<Long, Instant> ultimoReenvio = new ConcurrentHashMap<>();
     private static final long REENVIO_SEGUNDOS = 60;
 
-    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno, @Value("${lw.urls.notificaciones}") String urlNotif,
+    public AuthService(UsuariosBd bd, JwtService jwt, InternalClient interno, SesionService sesiones, DosFactoresService dosFactores, @Value("${lw.urls.notificaciones}") String urlNotif,
                        @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.app.url}") String appUrl) {
-        this.bd = bd; this.jwt = jwt; this.interno = interno; this.urlNotif = urlNotif; this.urlVentas = urlVentas; this.appUrl = appUrl;
+        this.bd = bd; this.jwt = jwt; this.interno = interno; this.sesiones = sesiones; this.dosFactores = dosFactores; this.urlNotif = urlNotif; this.urlVentas = urlVentas; this.appUrl = appUrl;
     }
 
     public static String validarPassword(String p) {
@@ -43,14 +49,31 @@ public class AuthService {
 
     public String hash(String password) { return enc.encode(password); }
 
-    public SesionDto login(String email, String password) {
+    /** Devuelve la sesión (SesionDto) o, si la cuenta tiene 2FA, Requiere2faDto con un token temporal de 5 minutos para enviar el código. */
+    public Object login(String email, String password, String userAgent, String ip) {
         UsuarioFila u = bd.porEmail(email).orElseThrow(() -> ApiException.noAutorizado("Correo o contraseña incorrectos"));
         if (!enc.matches(password, u.password())) throw ApiException.noAutorizado("Correo o contraseña incorrectos");
         if (!u.activo()) throw ApiException.prohibido("Tu cuenta está bloqueada. Contacta al administrador.");
         // 428: el front lo usa para ofrecer "Reenviar correo de verificación".
         if (!u.emailVerificado()) throw new ApiException(HttpStatus.PRECONDITION_REQUIRED, "Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.");
+        if (dosFactores.estado(u.id()).activo()) return new Requiere2faDto(true, jwt.emitirDosPasos(u.id()), u.email());
+        return abrirSesion(u, userAgent, ip);
+    }
+
+    /** Segundo paso del login con 2FA: token temporal vigente + código de la app o de recuperación. Solo entonces se emite la sesión. */
+    public SesionDto loginDosPasos(String tokenTemporal, String codigo, String userAgent, String ip) {
+        Long id = jwt.validarDosPasos(tokenTemporal);
+        if (id == null) throw ApiException.noAutorizado("Pasaron más de 5 minutos. Vuelve a ingresar tu correo y contraseña.");
+        UsuarioFila u = bd.usuario(id);
+        if (!u.activo()) throw ApiException.prohibido("Tu cuenta está bloqueada. Contacta al administrador.");
+        dosFactores.verificar(id, codigo);
+        return abrirSesion(u, userAgent, ip);
+    }
+
+    private SesionDto abrirSesion(UsuarioFila u, String userAgent, String ip) {
         u = bd.marcarLogin(u.id());
-        return sesion(u, jwt.emitir(u.id(), u.rol()));
+        String tokenId = sesiones.registrar(u.id(), userAgent, ip);   // sesion_usuario: se puede listar y cerrar desde Configuración
+        return sesion(u, jwt.emitir(u.id(), u.rol(), tokenId));
     }
 
     /** Re-autenticación para acciones sensibles (p. ej. cambiar el precio de un plan): la contraseña coincide y la cuenta está activa. */
@@ -134,20 +157,42 @@ public class AuthService {
             try { plan = interno.get(urlVentas + "/internal/suscripciones/" + usuarioId, com.fasterxml.jackson.databind.JsonNode.class).path("plan").path("nombre").asText(null); }
             catch (Exception ignorada) { /* Ventas caído: la tarjeta se muestra sin el plan */ }
         }
-        return new SeguridadDto(u.email(), u.passwordActualizadaAt(), u.emailVerificado(), u.activo(), plan, u.createdAt(), esperaReenvio(usuarioId));
+        TotpFila t = dosFactores.estado(usuarioId);
+        return new SeguridadDto(u.email(), u.passwordActualizadaAt(), u.emailVerificado(), u.activo(), plan, u.createdAt(), esperaReenvio(usuarioId),
+                t.activo(), t.activadoAt(), t.activo() ? t.codigosDisponibles() : 0);
+    }
+
+    // ---------- Autenticación de dos factores ----------
+    public Configuracion2fa iniciar2fa(long usuarioId) { return dosFactores.iniciar(usuarioId, bd.usuario(usuarioId).email()); }
+
+    public Activacion2faDto confirmar2fa(long usuarioId, String codigo) {
+        List<String> codigos = dosFactores.confirmar(usuarioId, codigo);
+        interno.notificar(urlNotif, usuarioId, "CORREO", "Activaste la verificación en dos pasos de LicitaWatch",
+                "Activaste la autenticación de dos factores. Desde ahora, al iniciar sesión te pediremos el código de tu aplicación de autenticación: " + appUrl + "/login", true);
+        return new Activacion2faDto(codigos, seguridad(usuarioId));
+    }
+
+    /** Desactivar pide la contraseña y un código vigente (de la app o de recuperación). */
+    public SeguridadDto desactivar2fa(long usuarioId, String password, String codigo) {
+        if (password == null || !enc.matches(password, bd.usuario(usuarioId).password())) throw ApiException.invalido("La contraseña no es correcta");
+        dosFactores.desactivar(usuarioId, codigo);
+        interno.notificar(urlNotif, usuarioId, "CORREO", "Desactivaste la verificación en dos pasos de LicitaWatch",
+                "Desactivaste la autenticación de dos factores de tu cuenta. Si no fuiste tú, cambia tu contraseña de inmediato: " + appUrl + "/login", true);
+        return seguridad(usuarioId);
     }
 
     /**
      * Cambio de contraseña con sesión: valida la actual, las reglas del registro y que la nueva sea distinta; luego avisa por correo.
      * Responde 400 (no 401) si la actual no coincide, para que el front no lo confunda con una sesión vencida.
      */
-    public SeguridadDto cambiarPassword(long usuarioId, String actual, String nueva) {
+    public SeguridadDto cambiarPassword(long usuarioId, String actual, String nueva, boolean cerrarOtras, String tokenActual) {
         UsuarioFila u = bd.usuario(usuarioId);
         if (actual == null || !enc.matches(actual, u.password())) throw ApiException.invalido("La contraseña actual no es correcta");
         String err = validarPassword(nueva);
         if (err != null) throw ApiException.invalido(err);
         if (enc.matches(nueva, u.password())) throw ApiException.invalido("La nueva contraseña debe ser distinta de la actual");
         bd.cambiar(usuarioId, null, null, enc.encode(nueva));
+        if (cerrarOtras) sesiones.cerrarOtras(usuarioId, tokenActual);
         // Aviso por correo: notificar() nunca rompe el flujo si el servicio de correo falla.
         interno.notificar(urlNotif, usuarioId, "CORREO", "Tu contraseña de LicitaWatch fue cambiada",
                 "Cambiaste la contraseña de tu cuenta " + u.email() + " desde Configuración > Seguridad. Inicia sesión con tu nueva contraseña: "

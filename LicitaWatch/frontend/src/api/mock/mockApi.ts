@@ -3,7 +3,8 @@ import type {
   MetodoPago, NuevaLicitacion, Perfil, Plan, Postulacion, PuntoMensual, RegistroLicitador, RegistroOk, RegistroPyme,
   ResumenLicitador, ResumenPyme, SeguridadCuenta, Sesion, Suscripcion, TipoNotificacion, Usuario, UsuarioAdmin, Venta,
 } from '../types'
-import { ApiError } from '../errors'
+import { ApiError, avisarSesionTerminada } from '../errors'
+import { dispositivoDe, ipParcial, navegadorDe } from '../../lib/dispositivo'
 import { DURACION_MAX_MESES, ERROR_SIN_VERIFICAR, EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, MAX_REQUERIDOS, PLAZO_MINIMO_DIAS } from '../types'
 import { CIUDADES, REGIONES, RUBROS, TAMANOS } from './catalogs'
 import { PLANES, loadDb, nextId, planPorId, resetDb, saveDb, type DB, type LicitacionDB, type PostulacionDB, type UsuarioDB } from './db'
@@ -25,7 +26,15 @@ function actual(db: DB): Usuario & { password?: string } {
   const t = getToken()
   const id = t ? db.sesiones[t] : undefined
   const u = id ? db.usuarios.find((x) => x.id === id) : undefined
-  if (!u) throw new ApiError('Tu sesión expiró. Inicia sesión nuevamente.', 401)
+  if (!u) {
+    // Como el backend: si el token es de una sesión cerrada, «Tu sesión fue cerrada» y vuelta al login.
+    const cerrada = !!t && (db.sesionesInfo ?? []).some((s) => s.token === t && s.revocadaAt)
+    const mensaje = cerrada ? 'Tu sesión fue cerrada. Inicia sesión nuevamente.' : 'Tu sesión expiró. Inicia sesión nuevamente.'
+    if (t) { setToken(null); avisarSesionTerminada(mensaje) }
+    throw new ApiError(mensaje, 401)
+  }
+  const info = (db.sesionesInfo ?? []).find((s) => s.token === t)
+  if (info) info.ultimoUsoAt = ahora()
   if (!u.activo) throw new ApiError('Tu cuenta está bloqueada. Contacta a soporte.', 403)
   const { password: _p, ...resto } = u
   return resto
@@ -187,6 +196,63 @@ function registrar(db: DB, d: RegistroLicitador, rol: 'LICITADOR' | 'PYME', tama
 
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+/** Abre la sesión (token simulado + registro en sesionesInfo) después de la contraseña y, si corresponde, del código 2FA. */
+function abrirSesion(db: DB, u: UsuarioDB) {
+  const token = 'tk_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
+  db.sesiones[token] = u.id
+  db.sesionesInfo ??= []
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  db.sesionesInfo.push({ id: nextId(db, 'sesion'), token, usuarioId: u.id, dispositivo: dispositivoDe(ua), navegador: navegadorDe(ua), ip: '127.0.0.1', creadaAt: ahora(), ultimoUsoAt: ahora() })
+  u.ultimoLogin = ahora()
+  saveDb()
+  setToken(token)
+  return sesionDe(db, u.id, token)
+}
+
+// ---------- 2FA simulada (el código válido es 123456; mismas reglas de intentos que el backend) ----------
+const CODIGO_2FA_DEMO = '123456'
+const CLAVE_2FA_DEMO = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP'
+const pendientes2fa: Record<string, { usuarioId: number; expira: number }> = {}
+const ALFABETO_REC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+const nuevoCodigoRec = () => Array.from({ length: 8 }, (_, i) => (i === 4 ? '-' : '') + ALFABETO_REC[Math.floor(Math.random() * ALFABETO_REC.length)]).join('')
+/** Código de la app (123456) o de recuperación (un solo uso); 5 incorrectos = bloqueo de 5 minutos. */
+function verificar2fa(db: DB, u: UsuarioDB, codigo: string) {
+  if (u.totpBloqueadoHasta && new Date(u.totpBloqueadoHasta).getTime() > Date.now()) {
+    const min = Math.max(1, Math.ceil((new Date(u.totpBloqueadoHasta).getTime() - Date.now()) / 60_000))
+    throw new ApiError(`Demasiados códigos incorrectos. Intenta de nuevo en ${min} ${min === 1 ? 'minuto' : 'minutos'}.`, 429)
+  }
+  const limpio = codigo.replace(/\s/g, '')
+  const norm = codigo.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const rec = /^\d{6}$/.test(limpio) ? undefined : (u.codigosRecuperacion ?? []).find((c) => !c.usado && c.codigo.replace('-', '') === norm)
+  if (limpio === CODIGO_2FA_DEMO || rec) {
+    if (rec) rec.usado = true
+    u.totpIntentos = 0; u.totpBloqueadoHasta = undefined
+    saveDb()
+    return
+  }
+  const intentos = (u.totpIntentos ?? 0) + 1
+  if (intentos >= 5) {
+    u.totpIntentos = 0; u.totpBloqueadoHasta = new Date(Date.now() + 5 * 60_000).toISOString(); saveDb()
+    throw new ApiError('Demasiados códigos incorrectos. Por seguridad, espera 5 minutos e intenta de nuevo.', 429)
+  }
+  u.totpIntentos = intentos; saveDb()
+  const quedan = 5 - intentos
+  throw new ApiError(`Código incorrecto. Te ${quedan === 1 ? 'queda 1 intento' : `quedan ${quedan} intentos`} antes de un bloqueo de 5 minutos.`, 400)
+}
+
+/** Cierra la sesión de un token: deja de valer y queda en el historial con revocadaAt. */
+function revocar(db: DB, token: string) {
+  delete db.sesiones[token]
+  const s = (db.sesionesInfo ?? []).find((x) => x.token === token)
+  if (s && !s.revocadaAt) s.revocadaAt = ahora()
+}
+/** Cierra todas las sesiones del usuario menos la del token indicado; devuelve cuántas cerró. */
+function cerrarOtrasDe(db: DB, usuarioId: number, excepto: string | null): number {
+  const otras = (db.sesionesInfo ?? []).filter((s) => s.usuarioId === usuarioId && !s.revocadaAt && s.token !== excepto)
+  otras.forEach((s) => revocar(db, s.token))
+  return otras.length
+}
+
 /** Último reenvío del correo de verificación por usuario (máximo uno por minuto, como el backend; en memoria). */
 const ultimoReenvio: Record<number, number> = {}
 const esperaReenvio = (id: number) => Math.max(0, Math.ceil(60 - (Date.now() - (ultimoReenvio[id] ?? 0)) / 1000))
@@ -195,6 +261,8 @@ function seguridadDe(db: DB, id: number): SeguridadCuenta {
   return {
     email: u.email, passwordActualizadaAt: u.passwordActualizadaAt, emailVerificado: verificado(u), activo: u.activo,
     plan: u.rol === 'PYME' ? planActual(db, id).plan.nombre : undefined, miembroDesde: u.createdAt, reenvioDisponibleEn: esperaReenvio(id),
+    dosFactoresActivo: !!u.totpActivo, dosFactoresDesde: u.totpActivadoAt,
+    codigosRecuperacion: u.totpActivo ? (u.codigosRecuperacion ?? []).filter((c) => !c.usado).length : 0,
   }
 }
 
@@ -202,6 +270,16 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
   resetDemo() { resetDb(); setToken(null) },
   async correos() { await delay(80); return clon(loadDb().correos) },
 
+  async loginDosPasos(tokenTemporal, codigo) {
+    await delay(400)
+    const db = loadDb()
+    const p = pendientes2fa[tokenTemporal]
+    if (!p || p.expira < Date.now()) throw new ApiError('Pasaron más de 5 minutos. Vuelve a ingresar tu correo y contraseña.', 401)
+    const u = db.usuarios.find((x) => x.id === p.usuarioId)!
+    verificar2fa(db, u, codigo)
+    delete pendientes2fa[tokenTemporal]
+    return abrirSesion(db, u)
+  },
   async login(email, password) {
     await delay(500)
     const db = loadDb()
@@ -209,12 +287,13 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (!u || u.password !== password) throw new ApiError('Correo o contraseña incorrectos.', 401)
     if (!u.activo) throw new ApiError('Tu cuenta fue bloqueada por el equipo de LicitaWatch. Contacta a soporte.', 403)
     if (!verificado(u)) throw new ApiError('Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.', ERROR_SIN_VERIFICAR)
-    const token = 'tk_' + Math.random().toString(36).slice(2) + Date.now().toString(36)
-    db.sesiones[token] = u.id
-    u.ultimoLogin = ahora()
-    saveDb()
-    setToken(token)
-    return sesionDe(db, u.id, token)
+    if (u.totpActivo) {
+      // Con 2FA: todavía no hay sesión; el código (123456 en el modo simulado) se envía con loginDosPasos antes de 5 minutos.
+      const tokenTemporal = 'tk2fa_' + Math.random().toString(36).slice(2)
+      pendientes2fa[tokenTemporal] = { usuarioId: u.id, expira: Date.now() + 5 * 60_000 }
+      return { requiere2fa: true as const, tokenTemporal, email: u.email }
+    }
+    return abrirSesion(db, u)
   },
   async sesionActual() {
     await delay(120)
@@ -228,7 +307,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
   async logout() {
     const db = loadDb()
     const t = getToken()
-    if (t) { delete db.sesiones[t]; saveDb() }
+    if (t) { revocar(db, t); saveDb() }
     setToken(null)
   },
   async registrarLicitador(d) { await delay(700); return registrar(loadDb(), d, 'LICITADOR') },
@@ -256,7 +335,7 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     const db = loadDb()
     return seguridadDe(db, exigir(db, 'LICITADOR', 'PYME').id)
   },
-  async cambiarPassword(actual, nueva) {
+  async cambiarPassword(actual, nueva, cerrarOtras = false) {
     await delay(500)
     const db = loadDb()
     const u = db.usuarios.find((x) => x.id === exigir(db, 'LICITADOR', 'PYME').id)!
@@ -267,9 +346,75 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (nueva === actual) throw new ApiError('La nueva contraseña debe ser distinta de la actual', 400)
     u.password = nueva
     u.passwordActualizadaAt = ahora()
+    if (cerrarOtras) cerrarOtrasDe(db, u.id, getToken())
     correo(db, u.id, 'Tu contraseña de LicitaWatch fue cambiada', `Cambiaste la contraseña de tu cuenta ${u.email} desde Configuración > Seguridad. Desde ahora, inicia sesión con tu nueva contraseña. Si no fuiste tú, usa «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión.`, '/login', 'Iniciar sesión')
     saveDb()
     return seguridadDe(db, u.id)
+  },
+  async iniciar2fa() {
+    await delay(300)
+    const db = loadDb()
+    const u = db.usuarios.find((x) => x.id === actual(db).id)!
+    if (u.totpActivo) throw new ApiError('La autenticación de dos factores ya está activa', 409)
+    u.totpPendiente = true
+    saveDb()
+    // En el modo simulado no se dibujan QR (el backend los genera con zxing): se muestra la clave para escribirla a mano.
+    return {
+      clave: CLAVE_2FA_DEMO.replace(/(.{4})(?!$)/g, '$1 '), otpauthUri: `otpauth://totp/LicitaWatch:${encodeURIComponent(u.email)}?secret=${CLAVE_2FA_DEMO}&issuer=LicitaWatch`,
+      urlAndroid: 'https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2', urlIos: 'https://apps.apple.com/app/google-authenticator/id388497605',
+    }
+  },
+  async confirmar2fa(codigo) {
+    await delay(400)
+    const db = loadDb()
+    const u = db.usuarios.find((x) => x.id === actual(db).id)!
+    if (u.totpActivo) throw new ApiError('La autenticación de dos factores ya está activa', 409)
+    if (!u.totpPendiente) throw new ApiError('Primero escanea el código QR (vuelve a empezar la activación)', 400)
+    verificar2fa(db, u, codigo)
+    const codigos = Array.from({ length: 8 }, nuevoCodigoRec)
+    u.totpActivo = true; u.totpPendiente = false; u.totpActivadoAt = ahora()
+    u.codigosRecuperacion = codigos.map((c) => ({ codigo: c }))
+    correo(db, u.id, 'Activaste la verificación en dos pasos de LicitaWatch', 'Activaste la autenticación de dos factores. Desde ahora, al iniciar sesión te pediremos el código de tu aplicación de autenticación.', '/login', 'Iniciar sesión')
+    saveDb()
+    return { codigosRecuperacion: codigos, seguridad: seguridadDe(db, u.id) }
+  },
+  async desactivar2fa(password, codigo) {
+    await delay(400)
+    const db = loadDb()
+    const u = db.usuarios.find((x) => x.id === actual(db).id)!
+    if (!u.totpActivo) throw new ApiError('La autenticación de dos factores no está activa', 400)
+    if (u.password !== password) throw new ApiError('La contraseña no es correcta', 400)
+    verificar2fa(db, u, codigo)
+    u.totpActivo = false; u.totpActivadoAt = undefined; u.codigosRecuperacion = []
+    correo(db, u.id, 'Desactivaste la verificación en dos pasos de LicitaWatch', 'Desactivaste la autenticación de dos factores de tu cuenta. Si no fuiste tú, cambia tu contraseña de inmediato.')
+    saveDb()
+    return seguridadDe(db, u.id)
+  },
+  async misSesiones() {
+    await delay(200)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const t = getToken()
+    return (db.sesionesInfo ?? []).filter((s) => s.usuarioId === u.id && !s.revocadaAt)
+      .sort((a, b) => b.ultimoUsoAt.localeCompare(a.ultimoUsoAt))
+      .map((s) => ({ id: s.id, dispositivo: s.dispositivo, navegador: s.navegador, ip: ipParcial(s.ip), creadaAt: s.creadaAt, ultimoUsoAt: s.ultimoUsoAt, actual: s.token === t }))
+  },
+  async cerrarSesionRemota(id) {
+    await delay(300)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const s = (db.sesionesInfo ?? []).find((x) => x.id === id && x.usuarioId === u.id)
+    if (!s) throw new ApiError('Sesión no encontrada', 404)
+    revocar(db, s.token)
+    saveDb()
+  },
+  async cerrarOtrasSesiones() {
+    await delay(300)
+    const db = loadDb()
+    const u = exigir(db, 'LICITADOR', 'PYME')
+    const cerradas = cerrarOtrasDe(db, u.id, getToken())
+    saveDb()
+    return { cerradas }
   },
   async reenviarVerificacionSesion() {
     await delay(400)
