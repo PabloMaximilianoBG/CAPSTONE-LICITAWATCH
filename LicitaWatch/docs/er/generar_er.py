@@ -149,7 +149,7 @@ svg.lineas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1
 """
 
 # Destacar lo agregado desde la versión anterior del ER (se ve en amarillo).
-NUEVO = {('usuarios', 'usuario', 'ultimo_login'), ('usuarios', 'usuario', 'password_actualizada_at'),
+NUEVO = {('ventas', 'suscripcion', 'cancelada_at'), ('usuarios', 'usuario', 'ultimo_login'), ('usuarios', 'usuario', 'password_actualizada_at'),
          *{('usuarios', 'usuario', c) for c in ('totp_activo', 'totp_secreto_cifrado', 'totp_activado_at', 'totp_intentos_fallidos', 'totp_bloqueado_hasta')},
          *{('usuarios', 'usuario_codigo_recuperacion', c) for c in ('id', 'usuario_id', 'codigo_hash', 'usado_at')},
          *{('usuarios', 'sesion_usuario', c) for c in ('id', 'usuario_id', 'token_id', 'dispositivo', 'navegador', 'ip', 'creada_at', 'ultimo_uso_at', 'expira_at', 'revocada_at')}, ('licitaciones', 'postulacion', 'archivada'), ('licitaciones', 'licitacion', 'duracion_meses'),

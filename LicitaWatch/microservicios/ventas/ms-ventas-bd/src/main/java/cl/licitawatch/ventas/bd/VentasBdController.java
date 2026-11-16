@@ -20,7 +20,7 @@ public class VentasBdController {
     public record PlanFila(Integer id, String nombre, Integer precioMensual) {}
     public record CambioPrecio(int precio, long usuarioId, String motivo) {}
     public record HistorialFila(Long id, Integer planId, String plan, Integer precioAnterior, Integer precioNuevo, Long usuarioId, String motivo, LocalDateTime fecha) {}
-    public record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado) {}
+    public record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado, java.time.Instant canceladaAt) {}
     /** Venta con su pago (1:1 por venta_id). */
     public record VentaFila(Long id, Long suscripcionId, long monto, LocalDate fecha, String idTransaccion, String metodo, String estadoPago) {}
     public record Estado(String estado) {}
@@ -37,7 +37,7 @@ public class VentasBdController {
     }
 
     private static PlanFila fila(PlanSuscripcion p) { return new PlanFila(p.getId(), p.getNombre(), p.getPrecioMensual()); }
-    private static SuscFila fila(Suscripcion s) { return new SuscFila(s.getId(), s.getUsuarioId(), s.getPlan().getId(), s.getPlan().getNombre(), s.getEstado().getNombre()); }
+    private static SuscFila fila(Suscripcion s) { return new SuscFila(s.getId(), s.getUsuarioId(), s.getPlan().getId(), s.getPlan().getNombre(), s.getEstado().getNombre(), s.getCanceladaAt()); }
     private static VentaFila fila(Venta v, Pago p) {
         return new VentaFila(v.getId(), v.getSuscripcionId(), v.getMonto().longValue(), v.getFecha(), p == null ? null : p.getIdTransaccion(),
                 p == null ? null : p.getMetodo().getNombre(), p == null ? null : p.getEstado().getNombre());
@@ -81,6 +81,8 @@ public class VentasBdController {
     @PutMapping("/suscripciones/{id}/estado") @Transactional
     public SuscFila cambiarEstado(@PathVariable long id, @RequestBody Estado e) {
         Suscripcion s = suscripciones.findById(id).orElseThrow(() -> ApiException.noEncontrado("Suscripción no encontrada"));
+        // Cancelar una suscripción activa deja la fecha para el historial (las vencidas o renovadas no la llevan).
+        if ("Cancelada".equals(e.estado()) && "Activa".equals(s.getEstado().getNombre())) s.setCanceladaAt(java.time.Instant.now());
         s.setEstado(estSusc(e.estado()));
         return fila(s);
     }

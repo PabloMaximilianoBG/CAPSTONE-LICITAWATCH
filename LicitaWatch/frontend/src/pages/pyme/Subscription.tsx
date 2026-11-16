@@ -40,6 +40,7 @@ export function Subscription() {
   const [redirigiendo, setRedirigiendo] = useState(false)
   const [retorno, setRetorno] = useState<RetornoWebpay | null>(leerRetorno)
   const [cancelar, setCancelar] = useState(false)
+  const [cancelada, setCancelada] = useState(false)   // pop-up de aviso después de cancelar
 
   // Al volver de Webpay se muestra el resultado una sola vez: se limpia la URL para que recargar no lo repita.
   useEffect(() => { if (retorno) window.history.replaceState(null, '', '/app/suscripcion') }, []) // eslint-disable-line
@@ -58,7 +59,7 @@ export function Subscription() {
     } catch (e) { setRedirigiendo(false); toast.error((e as Error).message) }
   }
   const confirmarCancelar = async () => {
-    try { await api.cancelarSuscripcion(); toast.ok('Suscripción cancelada. Vuelves al plan Estándar.'); sub.recargar() } catch (e) { toast.error((e as Error).message) }
+    try { await api.cancelarSuscripcion(); setCancelada(true); sub.recargar(); pagos.recargar() } catch (e) { toast.error((e as Error).message) }
     setCancelar(false)
   }
 
@@ -99,12 +100,17 @@ export function Subscription() {
       </div>
 
       <Card>
-        <CardHeader icon="card" title="Historial de pagos" />
+        <CardHeader icon="card" title="Historial de pagos" subtitle="Pagos aprobados y rechazados, y cancelaciones de tu suscripción" />
         {pagos.loading ? <Cargando /> : !pagos.data?.length ? <p className="muted-p">Aún no tienes pagos.</p> : (
           <div className="table-wrap"><table className="table">
             <thead><tr><th>Fecha</th><th>Plan</th><th>Método</th><th>Transacción</th><th>Monto</th><th>Estado</th></tr></thead>
             <tbody>{pagos.data.map((v) => (
-              <tr key={v.id}><td>{fechaCorta(v.fecha)}</td><td>{v.plan}</td><td>{v.metodo}</td><td><code>{v.idTransaccion}</code></td><td>{clp(v.monto)}</td><td><Badge tono={tonoEstado(v.estado)} dot>{v.estado}</Badge></td></tr>
+              <tr key={v.id} className={v.estado === 'Cancelada' ? 'fila-cancelada' : undefined}>
+                <td>{fechaCorta(v.fecha)}</td><td>{v.plan}</td>
+                <td>{v.metodo ?? '—'}</td><td>{v.idTransaccion ? <code>{v.idTransaccion}</code> : '—'}</td>
+                <td>{clp(v.monto)}</td>
+                <td><Badge tono={v.estado === 'Cancelada' ? 'red' : tonoEstado(v.estado)} dot>{v.estado}</Badge></td>
+              </tr>
             ))}</tbody>
           </table></div>
         )}
@@ -114,7 +120,7 @@ export function Subscription() {
         pie={<><Button variant="ghost" onClick={() => setPlan(null)} disabled={redirigiendo}>Cancelar</Button><Button icon="lock" loading={redirigiendo} onClick={pagar}>Ir a pagar {plan && clp(plan.precioMensual)}</Button></>}>
         {plan && (
           <div className="stack-sm">
-            <div className="webpay"><b>Webpay Plus</b><span>Transbank · ambiente de integración (pagos de prueba, sin cobro real)</span></div>
+            <div className="webpay"><b>Webpay Plus</b><span>Pago seguro con Transbank</span></div>
             <div className="pay-resumen"><span>Plan {plan.nombre} · 30 días</span><b>{clp(plan.precioMensual)}</b></div>
             <p className="muted-p">Te llevaremos al formulario seguro de Webpay para ingresar tu tarjeta. LicitaWatch nunca ve ni guarda los datos de tu tarjeta. Al terminar volverás aquí con el comprobante.</p>
             <details className="tarjetas-prueba">
@@ -129,6 +135,20 @@ export function Subscription() {
       </Modal>
       <Modal abierto={!!retorno} onClose={() => setRetorno(null)} titulo="Resultado del pago" ancho={460} pie={<Button onClick={() => setRetorno(null)}>{retorno?.pago === 'aprobado' ? 'Listo' : 'Entendido'}</Button>}>
         {retorno && <ResultadoWebpay r={retorno} />}
+      </Modal>
+      <Modal abierto={cancelada} onClose={() => setCancelada(false)} titulo="Tu suscripción Premium fue cancelada" ancho={480}
+        pie={<><Button variant="ghost" onClick={() => setCancelada(false)}>Entendido</Button>
+          {(() => { const p = planes.data?.find((x) => x.nombre === 'Premium'); return p ? <Button icon="crown" onClick={() => { setCancelada(false); abrir(p) }}>Volver a Premium</Button> : null })()}</>}>
+        <div className="limite-pop">
+          <span className="limite-ic"><Icon name="xcircle" size={28} /></span>
+          <p>Ya no estás suscrito a Premium. Desde hoy estás en el plan <b>Estándar</b>:</p>
+          <ul>
+            <li><Icon name="checkcircle" size={16} />3 postulaciones al mes (antes 7)</li>
+            <li><Icon name="checkcircle" size={16} />Sin LicitAsist, «Redactar con IA» ni análisis de licitaciones</li>
+            <li><Icon name="checkcircle" size={16} />Tus postulaciones ya enviadas se mantienen</li>
+          </ul>
+          <p className="limite-nota">Te enviamos un correo con el aviso. La cancelación quedó registrada en tu historial de pagos.</p>
+        </div>
       </Modal>
       <Modal abierto={cancelar} onClose={() => setCancelar(false)} titulo="Cancelar suscripción" pie={<><Button variant="ghost" onClick={() => setCancelar(false)}>Mantener Premium</Button><Button variant="danger" onClick={confirmarCancelar}>Sí, cancelar</Button></>}>
         <p>Volverás al plan Estándar (3 postulaciones al mes) y perderás LicitAsist y la prioridad en postulaciones.</p>

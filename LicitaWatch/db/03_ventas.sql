@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS suscripcion (        -- 1 plan -> N suscripciones
   id                     BIGSERIAL PRIMARY KEY,
   usuario_id             BIGINT  NOT NULL,      -- REF Usuarios
   plan_id                INTEGER NOT NULL REFERENCES plan_suscripcion(id),
-  estado_suscripcion_id  INTEGER NOT NULL REFERENCES estado_suscripcion(id)
+  estado_suscripcion_id  INTEGER NOT NULL REFERENCES estado_suscripcion(id),
+  cancelada_at           TIMESTAMPTZ            -- cuándo la canceló la Pyme (historial); NULL = no cancelada por ella (vencida, renovada o pago rechazado)
 );
 CREATE INDEX IF NOT EXISTS ix_susc_usuario ON suscripcion(usuario_id);
 

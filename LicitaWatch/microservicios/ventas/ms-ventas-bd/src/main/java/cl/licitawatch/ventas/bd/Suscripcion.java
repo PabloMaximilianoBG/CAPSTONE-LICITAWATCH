@@ -10,7 +10,9 @@ public class Suscripcion {
     @Column(name = "usuario_id", nullable = false) private Long usuarioId;
     @ManyToOne(fetch = FetchType.EAGER, optional = false) @JoinColumn(name = "plan_id", nullable = false) private PlanSuscripcion plan;
     @ManyToOne(fetch = FetchType.EAGER, optional = false) @JoinColumn(name = "estado_suscripcion_id", nullable = false) private EstadoSuscripcion estado;
+    @Column(name = "cancelada_at") private java.time.Instant canceladaAt;   // cuándo la canceló la Pyme (null = no la canceló ella)
     public Long getId() { return id; } public Long getUsuarioId() { return usuarioId; } public void setUsuarioId(Long v) { usuarioId = v; }
     public PlanSuscripcion getPlan() { return plan; } public void setPlan(PlanSuscripcion v) { plan = v; }
     public EstadoSuscripcion getEstado() { return estado; } public void setEstado(EstadoSuscripcion v) { estado = v; }
+    public java.time.Instant getCanceladaAt() { return canceladaAt; } public void setCanceladaAt(java.time.Instant v) { canceladaAt = v; }
 }

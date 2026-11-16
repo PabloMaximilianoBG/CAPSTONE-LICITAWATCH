@@ -60,6 +60,14 @@ final class CorreoHtml {
             c.parrafos.add("Desde ahora, inicia sesión con tu nueva contraseña.");
             c.botonTexto = "Iniciar sesión"; c.botonUrl = appUrl + "/login";
             c.aviso = "Si no fuiste tú, entra a LicitaWatch y usa «¿Olvidaste tu contraseña?» en la pantalla de inicio de sesión para recuperar tu cuenta.";
+        } else if ("CORREO".equals(tipo) && asunto != null && asunto.startsWith("Cancelaste tu suscripción")) {
+            c.etiqueta = "Suscripción";
+            c.titulo = "Cancelaste tu suscripción Premium";
+            c.estado = "Estado: CANCELADA"; c.estadoColor = ROJO; c.estadoFondo = ROJO_BG;
+            c.parrafos.add("Tu suscripción Premium fue cancelada. Desde hoy estás en el plan Estándar.");
+            c.parrafos.add("Con el plan Estándar tienes 3 postulaciones al mes y dejas de tener LicitAsist, «Redactar con IA» y la prioridad ante los Licitadores.");
+            c.botonTexto = "Volver a Premium"; c.botonUrl = appUrl + "/app/suscripcion";
+            c.aviso = "Si no fuiste tú quien canceló, cambia tu contraseña desde Configuración y vuelve a activar Premium cuando quieras.";
         } else if ("Licitación de tu rubro".equals(tipo)) {
             c.etiqueta = "Oportunidad";
             c.titulo = "Nueva licitación de tu rubro";

@@ -26,7 +26,7 @@ export interface PostulacionDB {
 }
 export interface NotificacionDB extends Notificacion { usuarioId: number }
 export interface SesionMockDB { id: number; token: string; usuarioId: number; dispositivo: string; navegador: string; ip: string; creadaAt: string; ultimoUsoAt: string; revocadaAt?: string }
-export interface SuscripcionDB extends Omit<Suscripcion, 'plan' | 'postulacionesUsadas'> { planId: number }
+export interface SuscripcionDB extends Omit<Suscripcion, 'plan' | 'postulacionesUsadas'> { planId: number; canceladaAt?: string }
 export interface CorreoDB { id: number; para: string; asunto: string; cuerpo: string; fecha: string; enlace?: string; etiqueta?: string }
 export interface TokenDB { token: string; usuarioId: number; expira: string; usado: boolean; tipo?: 'reset' | 'verificar' }  // sin tipo = reset (datos antiguos)
 
