@@ -2,14 +2,17 @@ import { api } from '../../api'
 import type { ResumenLicitador } from '../../api/types'
 import { AreaChart, Donut } from '../../lib/charts'
 import { Badge, Button, Card, CardHeader, Cargando, EmptyState, PageHeader, StatCard, tonoEstado, useAsync } from '../../components/ui/ui'
+import { NumeroAnimado } from '../../components/ui/NumeroAnimado'
 import { BannerCarousel, NotifPanel, TenderCard } from '../../components/app/shared'
 import { AccesosRapidosCard, ListaCierres, PrimerosPasosCard, type Acceso } from '../../components/app/PanelTarjetas'
 import { useAuth } from '../../context/AuthContext'
 import { Link, navigate } from '../../lib/router'
 import { Icon } from '../../lib/icons'
 import { diasHasta, fechaCorta } from '../../lib/format'
+import { fechaLarga, saludoSegunHora, tendenciaMensual } from '../../lib/saludo'
 
 export function LicitadorDashboard() {
+  const { sesion } = useAuth()
   const res = useAsync(() => api.resumenLicitador(), [])
   const r = res.data
   if (res.loading && !r) return <Cargando />
@@ -17,24 +20,25 @@ export function LicitadorDashboard() {
     <Card><EmptyState icon="alert" titulo="No pudimos cargar tu panel" texto={res.error ?? 'Revisa tu conexión e inténtalo de nuevo.'}
       accion={<Button icon="refresh" onClick={res.recargar}>Reintentar</Button>} /></Card>
   )
-  const promedio = r.publicadas ? (r.postulacionesRecibidas / r.publicadas).toFixed(1).replace('.0', '').replace('.', ',') : '0'
+  const tend = tendenciaMensual(r.porMes)
+  const promedio = r.publicadas ? Math.round((r.postulacionesRecibidas / r.publicadas) * 10) / 10 : 0
   return (
-    <div className="stack">
+    <div className="stack panel-anim">
       <BannerCarousel slides={[
         { chip: 'Siempre gratis', icon: 'gift', tono: 'blue', titulo: 'Publica y adjudica sin pagar nada', texto: 'Como Licitador, todas las funcionalidades son gratuitas: publicaciones ilimitadas, postulaciones y chat.', to: '/app/licitaciones/nueva', cta: 'Publicar licitación' },
         { chip: 'Postulaciones', icon: 'users', tono: 'teal', titulo: 'Revisa y selecciona a la mejor Pyme', texto: 'Aprueba o rechaza cada propuesta y adjudica con un clic. Las Premium aparecen primero.', to: '/app/licitaciones', cta: 'Ver mis licitaciones' },
         { chip: 'Chat privado', icon: 'chat', tono: 'violet', titulo: 'Conversa con la Pyme adjudicada', texto: 'Cuando adjudicas, el chat se abre automáticamente para coordinar los siguientes pasos.', to: '/app/chat', cta: 'Abrir chat' },
       ]} />
-      <PageHeader title="Panel de control" subtitle="Resumen de tus licitaciones y postulaciones recibidas." actions={<Button icon="plus" onClick={() => navigate('/app/licitaciones/nueva')}>Publicar licitación</Button>} />
+      <PageHeader title={`${saludoSegunHora()}, ${(sesion?.perfil.nombreContacto ?? '').split(' ')[0]} 👋`} subtitle={`${fechaLarga()} · Resumen de tus licitaciones y postulaciones recibidas.`} actions={<Button icon="plus" onClick={() => navigate('/app/licitaciones/nueva')}>Publicar licitación</Button>} />
       <div className="grid-main">
         <div className="stack">
           <div className="stats stats-3">
-            <StatCard icon="file" label="Licitaciones publicadas" valor={r.publicadas} />
-            <StatCard icon="clock" label="Abiertas" valor={r.abiertas} tono="green" />
-            <StatCard icon="award" label="Adjudicadas" valor={r.adjudicadas} tono="amber" />
-            <StatCard icon="users" label="Postulaciones recibidas" valor={r.postulacionesRecibidas} tono="violet" />
-            <StatCard icon="inbox" label="Por revisar" valor={r.pendientes} tono={r.pendientes > 0 ? 'red' : 'accent'} />
-            <StatCard icon="chart" label="Postulaciones por licitación" valor={promedio} tono="green" />
+            <StatCard icon="file" label="Licitaciones publicadas" valor={<NumeroAnimado valor={r.publicadas} />} />
+            <StatCard icon="clock" label="Abiertas" valor={<NumeroAnimado valor={r.abiertas} />} tono="green" />
+            <StatCard icon="award" label="Adjudicadas" valor={<NumeroAnimado valor={r.adjudicadas} />} tono="amber" />
+            <StatCard icon="users" label="Postulaciones recibidas" valor={<NumeroAnimado valor={r.postulacionesRecibidas} />} tono="violet" delta={tend?.texto} deltaTono={tend?.tono} />
+            <StatCard icon="inbox" label="Por revisar" valor={<NumeroAnimado valor={r.pendientes} />} tono={r.pendientes > 0 ? 'red' : 'accent'} />
+            <StatCard icon="chart" label="Postulaciones por licitación" valor={<NumeroAnimado valor={promedio} decimales={Number.isInteger(promedio) ? 0 : 1} />} tono="green" />
           </div>
           <div className="grid-2-eq">
             <div className="stack">
@@ -46,7 +50,7 @@ export function LicitadorDashboard() {
             </div>
             <Card>
               <CardHeader icon="chart" title="Estado de tus licitaciones" />
-              <Donut centro={String(r.publicadas)} subtitulo="licitaciones" segmentos={[
+              <Donut centro={<NumeroAnimado valor={r.publicadas} />} subtitulo="licitaciones" segmentos={[
                 { etiqueta: 'Abiertas', valor: r.abiertas, color: 'var(--green)' },
                 { etiqueta: 'Adjudicadas', valor: r.adjudicadas, color: 'var(--violet)' },
                 { etiqueta: 'Cerradas', valor: Math.max(0, r.publicadas - r.abiertas - r.adjudicadas), color: '#C3CCDD' },

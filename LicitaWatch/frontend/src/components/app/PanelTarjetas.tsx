@@ -4,6 +4,7 @@ import { Badge, Card, CardHeader, Progress, type Tono } from '../ui/ui'
 import { Link } from '../../lib/router'
 import { Icon, type IconName } from '../../lib/icons'
 import { diasHasta, fechaCorta } from '../../lib/format'
+import { CuentaRegresiva, conReloj } from './CuentaRegresiva'
 
 /* Tarjetas compartidas de los paneles de control del Licitador y de la Pyme (mismo diseño en ambos). */
 
@@ -20,7 +21,7 @@ export function ListaCierres({ licitaciones, vacio, detalle }: { licitaciones: L
           <li key={l.id}>
             <Link to={`/app/licitacion/${l.id}`} className="dash-item">
               <div><b title={l.titulo}>{l.titulo}</b><small>{detalle ? detalle(l) : `Cierra el ${fechaCorta(l.fechaCierre)}`}</small></div>
-              <Badge tono={tonoCierre(d)}>{d < 1 ? 'Cierra hoy' : `${d} día${d === 1 ? '' : 's'}`}</Badge>
+              <Badge tono={tonoCierre(d)}>{conReloj(l.fechaCierre) ? <CuentaRegresiva hasta={l.fechaCierre} prefijo="" /> : `${d} día${d === 1 ? '' : 's'}`}</Badge>
             </Link>
           </li>
         )

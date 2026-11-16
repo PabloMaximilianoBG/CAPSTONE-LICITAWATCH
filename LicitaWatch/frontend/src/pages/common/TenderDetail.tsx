@@ -4,7 +4,8 @@ import { ApiError } from '../../api/errors'
 import { EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTES, type ArchivoLicitacion, type ArchivoPostulacion, type DocumentoLicitacion,
   type DocumentoPostulacion, type Plan, type Postulacion } from '../../api/types'
 import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, Modal, Progress, Textarea, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
-import { VolverLink } from '../../components/app/shared'
+import { BotonGuardar, VolverLink } from '../../components/app/shared'
+import { CuentaRegresiva, conReloj } from '../../components/app/CuentaRegresiva'
 import { TenderPanorama } from '../licitador/TenderPanorama'
 import { ConfianzaLicitador, RedactarConIA, SoloPremium, TenderDetailPyme } from '../pyme/TenderDetailPyme'
 import { RevisarMensaje } from '../pyme/LicitAsistAcciones'
@@ -13,6 +14,7 @@ import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
 import { esPremium } from '../../lib/plan'
 import { diasHasta, duracionTexto, fechaCorta, hace, rangoPresupuesto, clp, tipoArchivo } from '../../lib/format'
+import { confetiUnaVez, lanzarConfeti } from '../../lib/confeti'
 
 export function TenderDetail({ id }: { id: number }) {
   const { sesion } = useAuth()
@@ -43,6 +45,13 @@ export function TenderDetail({ id }: { id: number }) {
   const refDoc = useRef<HTMLInputElement>(null)
   const [resaltada, setResaltada] = useState<number | null>(null)   // postulación elegida desde la vista panorámica
   useEffect(() => () => { if (visor) URL.revokeObjectURL(visor.url) }, [visor])
+  // La Pyme ganó esta licitación: confeti la primera vez que lo ve (una sola vez por postulación).
+  useEffect(() => {
+    const mia = mias.data?.find((p) => p.licitacionId === id)
+    if (!mia?.adjudicada) return
+    const t = setTimeout(() => confetiUnaVez(`adjudicada_${mia.id}`), 400)
+    return () => clearTimeout(t)
+  }, [mias.data, id])
 
   /** Documentos de la licitación (clave = id del adicional o «p» para el principal) y los que subió una Pyme (clave «post-<id>»). */
   const deLicitacion = (d: DocumentoLicitacion): Abrible => ({ clave: String(d.id ?? 'p'), nombre: d.nombre, cargar: () => api.documentoLicitacion(id, d.id) })
@@ -144,7 +153,7 @@ export function TenderDetail({ id }: { id: number }) {
   const ejecutarConfirmacion = async () => {
     if (!confirmar) return
     try {
-      if (confirmar.tipo === 'adjudicar' && confirmar.p) { const r = await api.adjudicar(confirmar.p.id); toast.ok('¡Licitación adjudicada! Se abrió el chat con la Pyme.'); recargar(); if (r.conversacionId) setTimeout(() => navigate(`/app/chat/${r.conversacionId}`), 700) }
+      if (confirmar.tipo === 'adjudicar' && confirmar.p) { const r = await api.adjudicar(confirmar.p.id); lanzarConfeti(); toast.ok('¡Licitación adjudicada! Se abrió el chat con la Pyme.'); recargar(); if (r.conversacionId) setTimeout(() => navigate(`/app/chat/${r.conversacionId}`), 700) }
       if (confirmar.tipo === 'cerrar') { await api.cerrarLicitacion(l.id); toast.ok('Licitación cerrada.'); recargar() }
       if (confirmar.tipo === 'eliminar') { await api.eliminarLicitacion(l.id); toast.ok('Licitación eliminada.'); setConfirmar(null); navigate('/app/licitaciones', true); return }
     } catch (e) { toast.error((e as Error).message) }
@@ -375,7 +384,8 @@ export function TenderDetail({ id }: { id: number }) {
           <div className="td-badges">
             <Badge tono={tonoEstado(l.estado)} dot>{l.estado}</Badge>
             <Badge tono="gray" icon="tag">{cat.rubro(l.rubroId)}</Badge>
-            {abierta && dias <= 5 && <Badge tono="amber" icon="clock">Cierra {dias === 0 ? 'hoy' : `en ${dias} días`}</Badge>}
+            {abierta && conReloj(l.fechaCierre) && <Badge tono={dias <= 1 ? 'red' : 'amber'}><CuentaRegresiva hasta={l.fechaCierre} /></Badge>}
+            <BotonGuardar licitacionId={l.id} conTexto />
           </div>
           <h1>{l.titulo}</h1>
           <p className="td-emp"><Icon name="building" size={16} />{l.licitadorNombre}</p>

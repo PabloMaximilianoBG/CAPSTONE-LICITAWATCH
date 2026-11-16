@@ -2,14 +2,17 @@ import { api } from '../../api'
 import type { ResumenPyme } from '../../api/types'
 import { AreaChart, Donut } from '../../lib/charts'
 import { Badge, Button, Card, CardHeader, Cargando, EmptyState, PageHeader, Progress, StatCard, tonoEstado, useAsync } from '../../components/ui/ui'
+import { NumeroAnimado } from '../../components/ui/NumeroAnimado'
 import { BannerCarousel, NotifPanel, TenderCard } from '../../components/app/shared'
 import { AccesosRapidosCard, ListaCierres, PrimerosPasosCard } from '../../components/app/PanelTarjetas'
 import { useAuth } from '../../context/AuthContext'
 import { Link, navigate } from '../../lib/router'
 import { Icon } from '../../lib/icons'
 import { diasHasta, fechaCorta, hace } from '../../lib/format'
+import { fechaLarga, saludoSegunHora, tendenciaMensual } from '../../lib/saludo'
 
 export function PymeDashboard() {
+  const { sesion } = useAuth()
   const res = useAsync(() => api.resumenPyme(), [])
   const r = res.data
   if (res.loading && !r) return <Cargando />
@@ -18,32 +21,33 @@ export function PymeDashboard() {
       accion={<Button icon="refresh" onClick={res.recargar}>Reintentar</Button>} /></Card>
   )
   const restantes = Math.max(0, r.limiteMes - r.usadasMes)
+  const tend = tendenciaMensual(r.porMes)
   // Las adjudicadas ya se cuentan dentro de las aprobadas.
   const decididas = r.aprobadas + r.rechazadas
-  const tasa = decididas ? `${Math.round((r.aprobadas / decididas) * 100)}%` : '—'
+  const tasa = decididas ? <NumeroAnimado valor={Math.round((r.aprobadas / decididas) * 100)} sufijo="%" /> : '—'
   return (
-    <div className="stack">
+    <div className="stack panel-anim">
       <BannerCarousel slides={[
         { chip: 'Búsqueda de licitaciones', icon: 'search', tono: 'teal', titulo: 'Encuentra oportunidades para tu empresa', texto: 'Búsqueda ilimitada por rubro, región y presupuesto, en todos los planes.', to: '/app/explorar', cta: 'Explorar licitaciones' },
         { chip: 'LicitAsist · Premium', icon: 'sparkles', tono: 'violet', titulo: 'Pregúntale a tu asistente con IA', texto: 'Describe lo que buscas y LicitAsist te muestra las licitaciones abiertas más relevantes.', to: '/app/asistente', cta: 'Conocer LicitAsist' },
         { chip: 'Adjudicación', icon: 'chat', tono: 'blue', titulo: 'Gana una licitación y conversa al instante', texto: 'Cuando te adjudican, se abre un chat directo con el Licitador para coordinar.', to: '/app/postulaciones', cta: 'Ver mis postulaciones' },
       ]} />
-      <PageHeader title="Panel de control" subtitle="Tu actividad de postulaciones y oportunidades recomendadas." actions={<Button icon="search" onClick={() => navigate('/app/explorar')}>Explorar licitaciones</Button>} />
+      <PageHeader title={`${saludoSegunHora()}, ${(sesion?.perfil.nombreContacto ?? '').split(' ')[0]} 👋`} subtitle={`${fechaLarga()} · Tu actividad de postulaciones y oportunidades recomendadas.`} actions={<Button icon="search" onClick={() => navigate('/app/explorar')}>Explorar licitaciones</Button>} />
       <div className="grid-main">
         <div className="stack">
           <div className="stats stats-3">
-            <StatCard icon="send" label="Postulaciones totales" valor={r.postulacionesTotal} />
-            <StatCard icon="clock" label="Pendientes" valor={r.pendientes} tono="amber" />
-            <StatCard icon="checkcircle" label="Aprobadas" valor={r.aprobadas} tono="green" />
-            <StatCard icon="award" label="Adjudicadas" valor={r.adjudicadas} tono="violet" />
-            <StatCard icon="xcircle" label="Rechazadas" valor={r.rechazadas} tono="red" />
+            <StatCard icon="send" label="Postulaciones totales" valor={<NumeroAnimado valor={r.postulacionesTotal} />} delta={tend?.texto} deltaTono={tend?.tono} />
+            <StatCard icon="clock" label="Pendientes" valor={<NumeroAnimado valor={r.pendientes} />} tono="amber" />
+            <StatCard icon="checkcircle" label="Aprobadas" valor={<NumeroAnimado valor={r.aprobadas} />} tono="green" />
+            <StatCard icon="award" label="Adjudicadas" valor={<NumeroAnimado valor={r.adjudicadas} />} tono="violet" />
+            <StatCard icon="xcircle" label="Rechazadas" valor={<NumeroAnimado valor={r.rechazadas} />} tono="red" />
             <StatCard icon="trending" label="Tasa de aprobación" valor={tasa} tono="green" />
           </div>
           <div className="grid-2-eq">
             <div className="stack">
               <Card className="plan-usage">
                 <CardHeader icon="crown" title="Tu plan este mes" action={<Badge tono={r.plan === 'Premium' ? 'teal' : 'gray'} icon={r.plan === 'Premium' ? 'crown' : undefined}>{r.plan}</Badge>} />
-                <div className="usage-num"><b>{r.usadasMes}</b><span>de {r.limiteMes} postulaciones usadas</span></div>
+                <div className="usage-num"><b><NumeroAnimado valor={r.usadasMes} /></b><span>de {r.limiteMes} postulaciones usadas</span></div>
                 <Progress valor={r.usadasMes} max={r.limiteMes} tono={restantes === 0 ? 'red' : restantes === 1 ? 'amber' : 'accent'} />
                 <p className="muted-p">{restantes === 0 ? 'Alcanzaste el límite del mes.' : `Te quedan ${restantes} postulación${restantes === 1 ? '' : 'es'} este mes.`}</p>
                 {r.plan === 'Estándar' && (
@@ -54,7 +58,7 @@ export function PymeDashboard() {
             </div>
             <Card>
               <CardHeader icon="chart" title="Resultado de tus postulaciones" />
-              <Donut centro={String(r.postulacionesTotal)} subtitulo="postulaciones" segmentos={[
+              <Donut centro={<NumeroAnimado valor={r.postulacionesTotal} />} subtitulo="postulaciones" segmentos={[
                 { etiqueta: 'Aprobadas', valor: r.aprobadas, color: 'var(--green)' },
                 { etiqueta: 'Pendientes', valor: r.pendientes, color: 'var(--amber)' },
                 { etiqueta: 'Rechazadas', valor: r.rechazadas, color: '#E5484D' },

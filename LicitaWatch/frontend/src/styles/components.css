@@ -132,3 +132,100 @@
 .cell-user div { display: flex; flex-direction: column; min-width: 0; } .cell-user small { color: var(--muted); }
 .row-actions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; }
 
+
+/* ---------- Recorrido guiado (components/app/Recorrido.tsx) ---------- */
+.rec { position: fixed; inset: 0; z-index: 200; }
+.rec-fondo { position: absolute; inset: 0; background: rgba(15, 23, 42, .55); }
+.rec-luz { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(15, 23, 42, .55), 0 0 0 3px var(--accent); transition: all .3s ease; pointer-events: none; }
+.rec-globo { position: fixed; width: 330px; max-width: calc(100vw - 32px); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-lg); animation: pop .2s; transition: top .3s ease, left .3s ease; }
+.rec-globo.centro { inset: 0; margin: auto; height: fit-content; width: 380px; }   /* sin transform: no choca con la animación «pop» */
+.rec-cab { display: flex; align-items: center; gap: 10px; } .rec-cab small { color: var(--muted); font-size: 12px; font-weight: 700; } .rec-cab .icon-btn { margin-left: auto; }
+.rec-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.rec-globo h4 { margin: 2px 0 0; font-size: 16px; } .rec-globo p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.rec-puntos { display: flex; gap: 5px; margin-top: 4px; } .rec-puntos i { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); transition: all .2s; } .rec-puntos i.on { width: 20px; border-radius: 4px; background: var(--accent); }
+.rec-pie { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+@media (max-width: 640px) { .rec-globo:not(.centro) { left: 16px !important; right: 16px; top: auto !important; bottom: 16px; width: auto; } }
+
+/* ---------- Movimiento en la app de Licitador y Pyme (paneles, gráficos y barras) ---------- */
+/* Gráfico de línea: la línea se dibuja de izquierda a derecha, el área aparece y los puntos saltan uno por uno. */
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .chart-linea { stroke-dasharray: 1; stroke-dashoffset: 1; animation: lw-dibujar 1.1s ease-out .15s forwards; }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .chart-area { animation: lw-aparecer .8s ease-out .6s both; }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .chart-punto { transform-box: fill-box; transform-origin: center; animation: lw-saltar .4s ease-out both; }
+/* Gráfico circular: cada segmento se llena desde cero. */
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .dona-seg { animation: lw-dona 1s ease-out .1s both; }
+/* Barras de progreso: se llenan desde cero al aparecer. */
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .progress-fill { animation: lw-llenar 1s ease-out .2s both; }
+/* Paneles de control: las tarjetas aparecen una tras otra deslizándose hacia arriba. */
+.panel-anim > .page-header, .panel-anim .stat, .panel-anim .card { animation: lw-subir .8s cubic-bezier(.22, .8, .3, 1) backwards; }   /* backwards: al terminar no «congela» la posición (el hover sigue funcionando) */
+.panel-anim .stat:nth-child(1), .panel-anim .stack > .card:nth-child(1) { animation-delay: .05s; } .panel-anim .stat:nth-child(2), .panel-anim .stack > .card:nth-child(2) { animation-delay: .1s; }
+.panel-anim .stat:nth-child(3), .panel-anim .stack > .card:nth-child(3) { animation-delay: .15s; } .panel-anim .stat:nth-child(4), .panel-anim .stack > .card:nth-child(4) { animation-delay: .2s; }
+.panel-anim .stat:nth-child(5), .panel-anim .stack > .card:nth-child(5) { animation-delay: .25s; } .panel-anim .stat:nth-child(6), .panel-anim .stack > .card:nth-child(6) { animation-delay: .3s; }
+.panel-anim .grid-2-eq .card { animation-delay: .35s; } .panel-anim .grid-main > .stack > .card:last-child { animation-delay: .45s; }
+@keyframes lw-dibujar { to { stroke-dashoffset: 0; } }
+@keyframes lw-aparecer { from { opacity: 0; } }
+@keyframes lw-saltar { from { opacity: 0; transform: scale(0); } }
+@keyframes lw-dona { from { stroke-dasharray: 0 400; } }
+@keyframes lw-llenar { from { width: 0; } }
+@keyframes lw-subir { from { opacity: 0; transform: translateY(18px); } }
+@media (prefers-reduced-motion: reduce) {
+  .chart-linea, .chart-area, .chart-punto, .dona-seg, .progress-fill, .panel-anim > .page-header, .panel-anim .stat, .panel-anim .card { animation: none !important; stroke-dashoffset: 0; }
+}
+/* Cuenta regresiva en vivo (components/app/CuentaRegresiva.tsx): números de ancho fijo para que no «salten» al cambiar. */
+.cuenta { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 14px; }
+.cuenta b { font-size: 15px; font-weight: 800; letter-spacing: .02em; }
+.cuenta.urgente { color: var(--red); } .badge .cuenta.urgente { color: inherit; }
+.badge:has(.cuenta) { padding: 5px 11px; }   /* etiqueta un poco más grande cuando lleva el reloj */
+.cuenta-reloj { flex: none; } .cuenta-manecilla { transform-origin: 12px 12px; animation: cuenta-girar 4s linear infinite; }
+@keyframes cuenta-girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cuenta-manecilla { animation: none; } }
+/* Confeti de celebración (lib/confeti.ts): encima de todo y sin bloquear los clics. */
+.confeti { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 500; pointer-events: none; }
+
+/* ---------- Detalles con vida (Licitador y Pyme) ---------- */
+/* Tendencia del mes en los indicadores. */
+.stat-delta.sube { color: var(--green); font-weight: 700; } .stat-delta.baja { color: var(--red); font-weight: 700; }
+/* Campana viva: se balancea y el número rojo aparece con un salto cuando llega una notificación nueva. */
+.bell.sonando svg { transform-origin: 50% 10%; animation: lw-campana .9s ease-in-out; }
+.bell.sonando i { animation: lw-salto .5s ease-out; }
+@keyframes lw-campana { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(16deg); } 30% { transform: rotate(-14deg); } 45% { transform: rotate(10deg); } 60% { transform: rotate(-8deg); } 75% { transform: rotate(4deg); } }
+@keyframes lw-salto { 0% { transform: scale(0); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
+/* Tarjetas que reaccionan al mouse: se elevan con sombra y el título toma el color de acento. */
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .tcard { transition: transform .45s cubic-bezier(.22, .8, .3, 1), box-shadow .45s ease, border-color .45s ease; }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .tcard:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .tcard:hover h4 { color: var(--accent); }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .tcard h4 { transition: color .35s ease; }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .stat { transition: transform .45s cubic-bezier(.22, .8, .3, 1), box-shadow .45s ease; }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .stat:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+:is(.app[data-role='licitador'], .app[data-role='pyme']) .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px color-mix(in srgb, var(--accent) 45%, transparent); }
+@media (prefers-reduced-motion: reduce) { .bell.sonando svg, .bell.sonando i { animation: none; } }
+
+/* ---------- Comprobante de pago para «Guardar como PDF» (lib/comprobante.ts) ---------- */
+.comprobante-impresion { display: none; }
+@media print {
+  @page { size: letter; margin: 18mm; }
+  html.imprimiendo body > *:not(.comprobante-impresion) { display: none !important; }
+  html.imprimiendo body { background: #fff !important; }
+  html.imprimiendo .comprobante-impresion { display: block; }
+}
+.cp { font-family: var(--font); color: #16203a; background: #fff; max-width: 680px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }   /* imprime también los fondos y colores */
+.cp-cab { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 18px; border-bottom: 3px solid #3b5bff; }
+.cp-marca { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 800; } .cp-marca b { color: #3b5bff; }
+.cp-tit { text-align: right; } .cp-tit h1 { margin: 0 0 6px; font-size: 22px; }
+.cp-sello { display: inline-block; padding: 4px 12px; border: 2px solid #15803d; border-radius: 6px; color: #15803d; font-weight: 800; letter-spacing: .12em; font-size: 13px; }
+.cp-bloque { margin-top: 22px; } .cp-bloque h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #6b7691; }
+.cp-fila { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid #e4e9f2; font-size: 14px; } .cp-fila span { color: #6b7691; }
+.cp-total { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; padding: 16px 18px; border-radius: 10px; background: #eef2ff; font-size: 16px; }
+.cp-total b { font-size: 24px; color: #3b5bff; }
+.cp-pie { margin-top: 28px; padding-top: 14px; border-top: 1px solid #e4e9f2; font-size: 11.5px; color: #6b7691; text-align: center; line-height: 1.6; }
+
+/* ---------- Licitaciones guardadas ⭐ (Pyme) ---------- */
+.tcard { position: relative; }
+.tcard:has(.btn-guardar) .tcard-top { padding-right: 38px; }
+.btn-guardar { display: inline-grid; place-items: center; gap: 6px; border: 0; background: transparent; color: var(--subtle); cursor: pointer; transition: color .2s, transform .2s; }
+.tcard > .btn-guardar { position: absolute; top: 14px; right: 12px; z-index: 2; width: 32px; height: 32px; border-radius: 50%; }
+.tcard > .btn-guardar:hover { background: var(--surface-2); color: #f59e0b; }
+.btn-guardar.on { color: #f59e0b; } .btn-guardar.on svg { fill: currentColor; animation: lw-salto .35s ease-out; }
+.btn-guardar.con-texto { display: inline-flex; padding: 3px 12px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.btn-guardar.con-texto.on { border-color: #f59e0b; background: color-mix(in srgb, #f59e0b 12%, transparent); color: #b45309; }
+[data-tema='oscuro'] .btn-guardar.con-texto.on { color: #fcd34d; }
+.sb-link em.em-suave { background: var(--surface-2); color: var(--muted); }

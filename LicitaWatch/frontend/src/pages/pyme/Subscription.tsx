@@ -4,6 +4,9 @@ import type { Plan } from '../../api/types'
 import { Badge, Button, Card, CardHeader, Cargando, Modal, PageHeader, Progress, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
 import { Icon } from '../../lib/icons'
 import { clp, fechaCorta } from '../../lib/format'
+import { lanzarConfeti } from '../../lib/confeti'
+import { imprimirComprobante, type DatosComprobante } from '../../lib/comprobante'
+import { useAuth } from '../../context/AuthContext'
 
 // Tarjetas del ambiente de integración de Transbank (transbankdevelopers.cl → Tarjetas de prueba). Autenticación del banco: RUT 11.111.111-1, clave 123.
 const TARJETAS_PRUEBA = [
@@ -36,6 +39,8 @@ export function Subscription() {
   const planes = useAsync(() => api.planes(), [])
   const sub = useAsync(() => api.miSuscripcion(), [])
   const pagos = useAsync(() => api.misPagos(), [])
+  const { sesion } = useAuth()
+  const cliente = { razonSocial: sesion?.perfil.razonSocial ?? '', rut: sesion?.perfil.rutEmpresa ?? '', email: sesion?.perfil.emailContacto || sesion?.usuario.email || '' }
   const [plan, setPlan] = useState<Plan | null>(null)
   const [redirigiendo, setRedirigiendo] = useState(false)
   const [retorno, setRetorno] = useState<RetornoWebpay | null>(leerRetorno)
@@ -103,13 +108,17 @@ export function Subscription() {
         <CardHeader icon="card" title="Historial de pagos" subtitle="Pagos aprobados y rechazados, y cancelaciones de tu suscripción" />
         {pagos.loading ? <Cargando /> : !pagos.data?.length ? <p className="muted-p">Aún no tienes pagos.</p> : (
           <div className="table-wrap"><table className="table">
-            <thead><tr><th>Fecha</th><th>Plan</th><th>Método</th><th>Transacción</th><th>Monto</th><th>Estado</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Plan</th><th>Método</th><th>Transacción</th><th>Monto</th><th>Estado</th><th aria-label="Comprobante" /></tr></thead>
             <tbody>{pagos.data.map((v) => (
               <tr key={v.id} className={v.estado === 'Cancelada' ? 'fila-cancelada' : undefined}>
                 <td>{fechaCorta(v.fecha)}</td><td>{v.plan}</td>
                 <td>{v.metodo ?? '—'}</td><td>{v.idTransaccion ? <code>{v.idTransaccion}</code> : '—'}</td>
                 <td>{clp(v.monto)}</td>
                 <td><Badge tono={v.estado === 'Cancelada' ? 'red' : tonoEstado(v.estado)} dot>{v.estado}</Badge></td>
+                <td>{v.estado === 'Aprobado' && v.idTransaccion && (
+                  <Button size="sm" variant="ghost" icon="download" title="Descargar el comprobante en PDF"
+                    onClick={() => imprimirComprobante({ transaccion: v.idTransaccion!, fecha: v.fecha, plan: v.plan, metodo: v.metodo, monto: v.monto, cliente })}>Comprobante</Button>
+                )}</td>
               </tr>
             ))}</tbody>
           </table></div>
@@ -134,7 +143,7 @@ export function Subscription() {
         )}
       </Modal>
       <Modal abierto={!!retorno} onClose={() => setRetorno(null)} titulo="Resultado del pago" ancho={460} pie={<Button onClick={() => setRetorno(null)}>{retorno?.pago === 'aprobado' ? 'Listo' : 'Entendido'}</Button>}>
-        {retorno && <ResultadoWebpay r={retorno} />}
+        {retorno && <ResultadoWebpay r={retorno} cliente={cliente} />}
       </Modal>
       <Modal abierto={cancelada} onClose={() => setCancelada(false)} titulo="Tu suscripción Premium fue cancelada" ancho={480}
         pie={<><Button variant="ghost" onClick={() => setCancelada(false)}>Entendido</Button>
@@ -157,7 +166,8 @@ export function Subscription() {
   )
 }
 
-function ResultadoWebpay({ r }: { r: RetornoWebpay }) {
+function ResultadoWebpay({ r, cliente }: { r: RetornoWebpay; cliente: DatosComprobante['cliente'] }) {
+  useEffect(() => { if (r.pago === 'aprobado') lanzarConfeti() }, [r.pago])   // ¡ya es Premium!
   const fila = (k: string, v?: string) => v ? <div><span>{k}</span><b>{v}</b></div> : null
   const detalle = (
     <div className="pay-detalle">
@@ -169,7 +179,13 @@ function ResultadoWebpay({ r }: { r: RetornoWebpay }) {
       {fila('Código de autorización', r.codigoAutorizacion)}
     </div>
   )
-  if (r.pago === 'aprobado') return <div className="pay-result ok"><Icon name="checkcircle" size={56} /><h3>¡Pago aprobado!</h3><p>Ya eres Premium: más postulaciones, prioridad y LicitAsist.</p>{detalle}</div>
+  const transaccion = r.ordenCompra ?? r.orden
+  if (r.pago === 'aprobado') return (
+    <div className="pay-result ok"><Icon name="checkcircle" size={56} /><h3>¡Pago aprobado!</h3><p>Ya eres Premium: más postulaciones, prioridad y LicitAsist.</p>{detalle}
+      {transaccion && <Button variant="outline" icon="download" onClick={() => imprimirComprobante({ transaccion, fecha: new Date().toISOString(), plan: r.plan ?? 'Premium',
+        metodo: r.metodo, monto: Number(r.monto ?? 0), autorizacion: r.codigoAutorizacion, ultimos4: r.ultimos4, cliente })}>Descargar comprobante (PDF)</Button>}
+    </div>
+  )
   if (r.pago === 'rechazado') return <div className="pay-result bad"><Icon name="xcircle" size={56} /><h3>Pago rechazado</h3><p>Transbank rechazó la transacción y no se realizó ningún cobro. Revisa los datos de tu tarjeta o prueba con otra.</p>{detalle}</div>
   if (r.pago === 'anulado') return <div className="pay-result bad"><Icon name="xcircle" size={56} /><h3>Pago anulado</h3><p>Cancelaste el pago en Webpay. No se realizó ningún cobro.</p>{detalle}</div>
   if (r.pago === 'expirado') return <div className="pay-result bad"><Icon name="xcircle" size={56} /><h3>Se acabó el tiempo</h3><p>El formulario de Webpay expiró antes de completar el pago. No se realizó ningún cobro.</p>{detalle}</div>
