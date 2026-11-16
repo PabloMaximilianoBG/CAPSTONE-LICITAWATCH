@@ -268,3 +268,21 @@ td.row-actions { display: table-cell; text-align: right; white-space: nowrap; } 
 .dosf-izq { justify-content: flex-start; }
 .dosf-login { display: flex; flex-direction: column; gap: 14px; } .dosf-login-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 @media (max-width: 640px) { .dosf-tiendas > div { grid-template-columns: 1fr; } }
+
+/* ---------- Panel de control del Licitador ---------- */
+.stats.stats-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .stats.stats-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dash-vacio { margin: 0; }
+.dash-lista { display: flex; flex-direction: column; gap: 8px; }
+.dash-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); text-decoration: none; }
+.dash-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+.dash-item > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .dash-item b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-item small { color: var(--muted); font-size: 12.5px; } .dash-item .badge { flex: none; }
+.dash-pasos { display: flex; flex-direction: column; gap: 9px; margin-top: 14px; font-size: 13.5px; }
+.dash-pasos li { display: flex; align-items: center; gap: 10px; } .dash-pasos li.ok { color: var(--muted); } .dash-pasos li.ok span:last-child { text-decoration: line-through; }
+.dash-pasos a { color: var(--text); font-weight: 600; text-decoration: none; } .dash-pasos a:hover { color: var(--accent); }
+.dash-check { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-2); color: var(--muted); }
+.dash-pasos li.ok .dash-check { background: var(--green-soft); color: var(--green); }
+.dash-accesos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dash-acceso { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 13px; font-weight: 600; text-align: center; text-decoration: none; }
+.dash-acceso svg { color: var(--accent); } .dash-acceso:hover { border-color: var(--accent); background: var(--accent-soft); }
