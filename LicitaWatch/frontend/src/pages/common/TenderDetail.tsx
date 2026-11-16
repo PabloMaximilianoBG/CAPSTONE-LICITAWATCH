@@ -7,6 +7,7 @@ import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, M
 import { VolverLink } from '../../components/app/shared'
 import { TenderPanorama } from '../licitador/TenderPanorama'
 import { ConfianzaLicitador, RedactarConIA, SoloPremium, TenderDetailPyme } from '../pyme/TenderDetailPyme'
+import { RevisarMensaje } from '../pyme/LicitAsistAcciones'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
@@ -232,6 +233,7 @@ export function TenderDetail({ id }: { id: number }) {
           )}
           <RedactarConIA licitacionId={l.id} premium={esPremium(sub.data)} onBorrador={setMensaje} />
           <Field label="Mensaje para el Licitador" hint="Cuéntale por qué eres la mejor opción."><Textarea rows={5} value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Experiencia similar, plazos, diferenciadores…" /></Field>
+          {premiumPyme && <RevisarMensaje licitacionId={l.id} mensaje={mensaje} onUsar={setMensaje} />}
           {pedidos.length > 0 && (
             <div className="req-subir">
               <h4>Documentos solicitados</h4>

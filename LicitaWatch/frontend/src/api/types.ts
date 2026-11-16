@@ -289,6 +289,36 @@ export interface BorradorPostulacion {
   ia: boolean
 }
 
+/** LicitAsist razona por la Pyme (Premium). ia = false: análisis básico del sistema porque la IA no respondió. */
+export interface AnalisisLicitacion {
+  licitacionId: number
+  titulo: string
+  veredicto: 'postular' | 'con-cuidado' | 'no-postular'
+  /** 0–100: compatibilidad (60 %), competencia (25) y tiempo para preparar la oferta (15). */
+  puntaje: number
+  compatibilidad: number
+  competencia: 'Baja' | 'Media' | 'Alta'
+  diasAlCierre: number
+  resumen: string
+  requisitos: { texto: string; estado: 'cumple' | 'no-cumple' | 'revisar'; nota: string }[]
+  riesgos: string[]
+  ia: boolean
+}
+export interface PlanDelMes {
+  restantes: number
+  limite: number
+  recomendaciones: { licitacion: Licitacion; puntaje: number; motivo: string }[]
+  ia: boolean
+}
+export interface RevisionMensaje {
+  puntaje: number
+  fortalezas: string[]
+  mejoras: string[]
+  /** Versión mejorada del mensaje (solo si respondió la IA). */
+  version?: string | null
+  ia: boolean
+}
+
 export interface FiltroLicitaciones {
   q?: string
   rubroId?: number
@@ -615,6 +645,12 @@ export interface Api {
   preguntarAsistente(texto: string): Promise<MensajeAsistente>
   /** Solo Pyme Premium (403 si es Estándar): borrador del mensaje de postulación a una licitación abierta. */
   redactarPostulacion(licitacionId: number): Promise<BorradorPostulacion>
+  /** Solo Premium: ¿me conviene postular? (veredicto, puntaje, requisitos que cumple y riesgos). */
+  analizarLicitacion(licitacionId: number): Promise<AnalisisLicitacion>
+  /** Solo Premium: en qué licitaciones abiertas usar las postulaciones que le quedan este mes (hasta 5). */
+  planDelMes(): Promise<PlanDelMes>
+  /** Solo Premium: puntaje, fortalezas, mejoras y versión mejorada del mensaje de postulación. */
+  revisarMensaje(licitacionId: number, mensaje: string): Promise<RevisionMensaje>
 
   // Administración
   estadisticasAdmin(): Promise<EstadisticasAdmin>

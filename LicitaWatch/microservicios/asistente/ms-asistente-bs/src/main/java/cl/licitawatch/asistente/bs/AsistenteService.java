@@ -17,10 +17,11 @@ public class AsistenteService {
     /** Borrador del mensaje de postulación; ia = false si Groq no respondió y se usó la plantilla local. */
     public record Borrador(String texto, boolean ia) {}
     private final InternalClient interno; private final GroqClient groq; private final String urlVentas, urlLicitaciones, urlUsuarios;
+    private final AnalisisService analisis;
 
-    public AsistenteService(InternalClient interno, GroqClient groq, @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.urls.licitaciones}") String urlLicitaciones,
+    public AsistenteService(InternalClient interno, GroqClient groq, AnalisisService analisis, @Value("${lw.urls.ventas}") String urlVentas, @Value("${lw.urls.licitaciones}") String urlLicitaciones,
                             @Value("${lw.urls.usuarios}") String urlUsuarios) {
-        this.interno = interno; this.groq = groq; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones; this.urlUsuarios = urlUsuarios;
+        this.interno = interno; this.groq = groq; this.analisis = analisis; this.urlVentas = urlVentas; this.urlLicitaciones = urlLicitaciones; this.urlUsuarios = urlUsuarios;
     }
 
     /** Suscripción de la Pyme; si no es Premium responde 403 con el mensaje indicado. */
@@ -60,6 +61,10 @@ public class AsistenteService {
         try { postulaciones = interno.get(urlLicitaciones + "/bs/postulaciones/mias", JsonNode.class); }
         catch (Exception e) { postulaciones = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode(); }
         StringBuilder ctx = new StringBuilder();
+        try { ctx.append(analisis.perfilParaChat(pymeId)).append("\n"); } catch (Exception ignorada) { /* sin perfil: responde igual con lo demás */ }
+        Map<Integer, String> rubros = analisis.nombres("rubros"), regiones = analisis.nombres("regiones");
+        Set<Long> postuladas = new HashSet<>();
+        for (JsonNode p : postulaciones) postuladas.add(p.path("licitacionId").asLong());
         ctx.append("Plan: ").append(sus.path("plan").path("nombre").asText()).append(" (").append(sus.path("postulacionesUsadas").asInt())
            .append(" de ").append(sus.path("plan").path("postulacionesMes").asInt()).append(" postulaciones usadas este mes)\n\n");
         ctx.append("Postulaciones de la Pyme (").append(postulaciones.size()).append("):\n");
@@ -70,8 +75,10 @@ public class AsistenteService {
         ctx.append("\nLicitaciones abiertas (").append(abiertas.size()).append("):\n");
         for (JsonNode l : abiertas)
             ctx.append("- [").append(l.path("id").asText()).append("] \"").append(l.path("titulo").asText()).append("\" de ").append(l.path("licitadorNombre").asText())
+               .append(" | rubro: ").append(rubros.getOrDefault(l.path("rubroId").asInt(), "?")).append(" | región: ").append(regiones.getOrDefault(l.path("regionId").asInt(), "?"))
+               .append(postuladas.contains(l.path("id").asLong()) ? " | YA POSTULÓ" : "")
                .append(" | presupuesto $").append(l.path("presupuestoMin").asText("?")).append(" a $").append(l.path("presupuestoMax").asText("?"))
-               .append(" | cierra ").append(l.path("fechaCierre").asText()).append(" | postulantes: ").append(l.path("postulantes").asText())
+               .append(" | cierra ").append(AnalisisService.fechaChile(l.path("fechaCierre").asText())).append(" (hora de Chile)").append(" | postulantes: ").append(l.path("postulantes").asText())
                .append(l.path("maxPostulantes").isNull() ? "" : " de " + l.path("maxPostulantes").asText())
                .append(l.path("duracionMeses").isNull() ? "" : " | duración del contrato: " + l.path("duracionMeses").asText() + " meses")
                .append(" | ").append(corto(l.path("descripcion").asText(), 300)).append("\n");
@@ -81,11 +88,31 @@ public class AsistenteService {
                 Ayudas a una Pyme a encontrar licitaciones, entender el estado de sus postulaciones, estimar qué tan probable es ganarlas
                 (según cuántos postulantes hay, el cupo máximo, si su oferta calza con lo pedido y la calidad de su mensaje) y a redactar
                 mejores mensajes de postulación. Usa SOLO los datos del contexto; nunca inventes licitaciones, montos ni estados.
-                Si estimas probabilidades, explica que es una estimación. Responde en español de Chile, claro y breve (máximo 12 líneas),
-                en texto plano sin Markdown (sin asteriscos ni #); usa guiones para las listas.""";
-        String respuesta = groq.responder(sistema, "Contexto de la Pyme:\n" + ctx + "\nConsulta de la Pyme: " + texto)
-                .map(t -> t.replace("**", "").replaceAll("(?m)^#+\\s*", "").replaceAll("(?m)[ \\t]+$", "")).orElse(base);
-        return new Respuesta("asistente", respuesta, top);
+                Si estimas probabilidades, explica que es una estimación. Las fechas ya vienen en hora de Chile: repítelas así, sin convertirlas a UTC.
+                «Mi rubro» y «mi región» son los del perfil de la Pyme. Si preguntan qué le falta al perfil, usa «Le falta en el perfil» y explica
+                que completarlo sube su compatibilidad. Para consejos generales (mensajes, documentos usuales del rubro) puedes usar buenas prácticas
+                de licitaciones en Chile, sin inventar datos de la plataforma.
+                Cómo funciona LicitaWatch: la Pyme abre una licitación en Explorar y postula con un mensaje (y los documentos que pida el Licitador);
+                el plan Estándar permite 3 postulaciones al mes y el Premium 7; el Licitador aprueba o rechaza cada postulación y, al aprobar una,
+                la licitación queda adjudicada a esa Pyme y se abre un chat privado entre ambos; las demás pendientes se rechazan. Cada licitación
+                cierra en su fecha o al completar sus cupos. Premium incluye LicitAsist, «Redactar con IA», «¿Me conviene postular?», «Revisa mi mensaje»
+                y aparecer destacada ante el Licitador.
+                Responde en español de Chile, claro y breve (máximo 12 líneas), en texto plano sin Markdown (sin asteriscos ni #); usa guiones para las listas.
+                Si tu respuesta menciona licitaciones concretas, termina con una última línea «IDS: <id>, <id>» con sus números entre corchetes del contexto (sin corchetes).""";
+        Optional<String> ia = groq.responder(sistema, "Contexto de la Pyme:\n" + ctx + "\nConsulta de la Pyme: " + texto)
+                .map(t -> t.replace("**", "").replaceAll("(?m)^#+\\s*", "").replaceAll("(?m)[ \\t]+$", ""));
+        if (ia.isEmpty()) return new Respuesta("asistente", base, top);
+        // Tarjetas bajo la respuesta: solo las licitaciones que la IA mencionó (línea final «IDS: …»), no las de la búsqueda por palabras.
+        String respuesta = ia.get();
+        List<JsonNode> mencionadas = new ArrayList<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?im)^\\s*IDS:\\s*(.*)$").matcher(respuesta);
+        if (m.find()) {
+            Set<Long> ids = new LinkedHashSet<>();
+            for (String x : m.group(1).split("[^0-9]+")) if (!x.isBlank()) ids.add(Long.parseLong(x));
+            for (Long id : ids) for (JsonNode l : abiertas) if (l.path("id").asLong() == id && mencionadas.size() < 5) mencionadas.add(l);
+            respuesta = m.replaceAll("").trim();
+        }
+        return new Respuesta("asistente", respuesta, mencionadas);
     }
 
     /**
