@@ -78,7 +78,20 @@
 .banner-ctrl { position: absolute; right: 20px; bottom: 14px; display: flex; align-items: center; gap: 8px; }
 .banner-ctrl button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .22); color: #fff; }
 .banner-ctrl button:hover { background: rgba(255, 255, 255, .38); } .banner-ctrl small { opacity: .85; font-size: 12px; }
-.banner-dots { display: flex; gap: 5px; } .banner-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .45); cursor: pointer; transition: all .2s; } .banner-dots i.on { width: 20px; border-radius: 4px; background: #fff; }
+.banner-dots { display: flex; gap: 5px; } .banner-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255, 255, 255, .45); cursor: pointer; transition: all .2s; }
+.banner-dots i.on { width: 20px; border-radius: 4px; background: #fff; }
+/* Anillo de progreso del carrusel: el ícono queda dentro de un círculo que se completa en --seg segundos. */
+.banner-anillo { position: absolute; right: 56px; top: 50%; transform: translateY(-50%); width: 104px; height: 104px; display: grid; place-items: center; color: #fff; }
+.banner-anillo svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.banner-anillo circle { fill: none; stroke-width: 5; stroke-linecap: round; }
+.banner-anillo .fondo { stroke: rgba(255, 255, 255, .22); }
+.banner-anillo .avance { stroke: rgba(255, 255, 255, .9); stroke-dasharray: 100; stroke-dashoffset: 100; animation: banner-anillo var(--seg, 6s) linear forwards; }
+.banner-anillo.pausa .avance { animation-play-state: paused; }
+.banner-anillo > svg + svg { opacity: .9; }
+@keyframes banner-anillo { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .banner-anillo .avance { animation: none; stroke-dashoffset: 0; opacity: .5; } }
+/* En pantallas chicas el anillo no se muestra, pero sigue «corriendo» (oculto) para que el carrusel avance. */
+@media (max-width: 900px) { .banner-anillo { visibility: hidden; } }
 
 /* ---- Tarjeta de licitación ---- */
 .tcard { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-sm); transition: transform .15s, box-shadow .15s, border-color .15s; }

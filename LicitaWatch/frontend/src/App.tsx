@@ -25,6 +25,7 @@ import { TenderDetail } from './pages/common/TenderDetail'
 import { Chat } from './pages/common/Chat'
 import { Profile } from './pages/common/Profile'
 import { Configuracion } from './pages/common/Configuracion'
+import { Guardadas } from './pages/pyme/Guardadas'
 import { Notifications } from './pages/common/Notifications'
 import { Help } from './pages/common/Help'
 import { Card, EmptyState, Button } from './components/ui/ui'
@@ -55,6 +56,7 @@ function Privada() {
     { path: '/app/licitaciones/nueva', render: () => solo(['LICITADOR'], <TenderForm />, rol) },
     { path: '/app/licitacion/:id', render: (p) => <TenderDetail id={Number(p.id)} /> },
     { path: '/app/explorar', render: () => solo(['PYME'], <Explore />, rol) },
+    { path: '/app/guardadas', render: () => solo(['PYME'], <Guardadas />, rol) },
     { path: '/app/postulaciones', render: () => solo(['PYME'], <MyApplications />, rol) },
     { path: '/app/suscripcion', render: () => solo(['PYME'], <Subscription />, rol) },
     { path: '/app/asistente', render: () => solo(['PYME'], <Assistant />, rol) },

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Card, PageHeader } from '../../components/ui/ui'
+import { Button, Card, PageHeader } from '../../components/ui/ui'
+import { verRecorrido } from '../../components/app/Recorrido'
 import { useAuth } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 
@@ -26,7 +27,8 @@ export function Help() {
   const items = [...(POR_ROL[sesion!.usuario.rol] ?? []), ...COMUN]
   return (
     <div className="stack">
-      <PageHeader title="Centro de ayuda" subtitle="Respuestas rápidas a las dudas más comunes." />
+      <PageHeader title="Centro de ayuda" subtitle="Respuestas rápidas a las dudas más comunes."
+        actions={sesion!.usuario.rol !== 'ADMIN' ? <Button variant="outline" icon="play" onClick={verRecorrido}>Ver recorrido de LicitaWatch</Button> : undefined} />
       <Card pad={false}>
         {items.map(([q, a], i) => (
           <div key={q} className={`faq ${abierta === i ? 'open' : ''}`}>

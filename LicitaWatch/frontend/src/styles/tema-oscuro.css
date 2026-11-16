@@ -1,0 +1,86 @@
+/* ============================================================================================
+   Modo oscuro (app interna de Licitador y Pyme). Se activa con <html data-tema="oscuro"> (lib/tema.ts).
+   1) Variables de color: cubren la mayor parte de la app (fondos, tarjetas, textos, bordes y tonos suaves).
+   2) Ajustes puntuales de colores que estaban escritos a mano para el tema claro.
+   ============================================================================================ */
+[data-tema='oscuro'] {
+  color-scheme: dark;   /* calendario, barras de scroll y controles nativos en oscuro */
+  --bg: #0b1120; --surface: #141c2f; --surface-2: #1b2539; --border: #263250; --border-strong: #35436a;
+  --text: #e6ebf5; --muted: #9ba7c2; --subtle: #6f7b98;
+  --blue: #6f88ff; --blue-soft: rgba(111, 136, 255, .16); --teal: #2dd4bf; --teal-soft: rgba(45, 212, 191, .15);
+  --violet: #a08bff; --violet-soft: rgba(160, 139, 255, .16); --green: #34d399; --green-soft: rgba(52, 211, 153, .14);
+  --amber: #fbbf24; --amber-soft: rgba(251, 191, 36, .14); --red: #f87171; --red-soft: rgba(248, 113, 113, .15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .35); --shadow: 0 4px 14px rgba(0, 0, 0, .35); --shadow-lg: 0 18px 50px rgba(0, 0, 0, .55);
+}
+[data-tema='oscuro'] .app[data-role='licitador'] { --accent: #6f88ff; --accent-soft: rgba(111, 136, 255, .16); }
+[data-tema='oscuro'] .app[data-role='pyme'] { --accent: #2dd4bf; --accent-soft: rgba(45, 212, 191, .15); }
+/* Transición suave al cambiar de tema */
+[data-tema] body, .app, .card, .stat, .tcard, .sidebar, .topbar { transition: background-color .25s, border-color .25s, color .25s; }
+
+/* ---- Menú lateral y barra superior ---- */
+[data-tema='oscuro'] .sb-user { background: linear-gradient(135deg, var(--accent-soft), var(--surface)); }
+[data-tema='oscuro'] .sb-link { color: #b6c0d8; }
+[data-tema='oscuro'] .sb-link:hover { color: var(--text); }
+[data-tema='oscuro'] .notif-item.unread, [data-tema='oscuro'] .notif-list li.new { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+[data-tema='oscuro'] .tema-btn { color: #fbbf24; }
+[data-tema='oscuro'] .topbar { background: rgba(11, 17, 32, .85); }   /* era gris claro fijo: «Hola, …» no se leía */
+[data-tema='oscuro'] .banner-cta { color: #16203a; }   /* botón blanco del carrusel: texto oscuro fijo para que se lea */
+
+/* ---- Componentes ---- */
+[data-tema='oscuro'] .btn-soft:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
+[data-tema='oscuro'] .field-label, [data-tema='oscuro'] .modal-body { color: var(--text); }
+[data-tema='oscuro'] .input:hover:not(:disabled) { border-color: #4a5a85; }
+[data-tema='oscuro'] .table tbody tr:hover { background: var(--surface-2); }
+[data-tema='oscuro'] .badge-blue { color: #a9b8ff; } [data-tema='oscuro'] .badge-teal { color: #5eead4; } [data-tema='oscuro'] .badge-violet { color: #c4b5fd; }
+[data-tema='oscuro'] .badge-green { color: #6ee7b7; } [data-tema='oscuro'] .badge-amber { color: #fcd34d; } [data-tema='oscuro'] .badge-red { color: #fca5a5; }
+[data-tema='oscuro'] .badge-gray { background: var(--surface-2); color: var(--muted); }
+
+/* ---- Paneles de control y tarjetas ---- */
+[data-tema='oscuro'] .tcard-meta { color: var(--muted); }
+[data-tema='oscuro'] .tip-card { background: linear-gradient(135deg, var(--blue-soft), var(--surface)); }
+[data-tema='oscuro'] .tip-teal { background: linear-gradient(135deg, var(--teal-soft), var(--surface)); }
+[data-tema='oscuro'] .tip-card p { color: var(--muted); }
+[data-tema='oscuro'] .callout-teal { color: #5eead4; }
+[data-tema='oscuro'] .chip { background: var(--surface); color: var(--text); }
+[data-tema='oscuro'] .banner { box-shadow: none; filter: saturate(.9) brightness(.92); }
+[data-tema='oscuro'] .tdp-destacada { color: #5eead4; }
+[data-tema='oscuro'] .lia-plan-txt p { color: #5eead4; }
+
+/* ============================== Entrega 2: resto de las pantallas ============================== */
+/* Textos: descripción de licitaciones, mensajes de postulaciones y citas */
+[data-tema='oscuro'] .prose, [data-tema='oscuro'] .applicant-main p, [data-tema='oscuro'] .apply-card blockquote { color: var(--text); }
+
+/* Mi suscripción: tarjetas de planes, Webpay y resultado */
+[data-tema='oscuro'] .plan { background: var(--surface); }
+[data-tema='oscuro'] .plan-pro { box-shadow: 0 16px 40px rgba(45, 212, 191, .12); }
+[data-tema='oscuro'] .webpay { background: linear-gradient(135deg, rgba(198, 30, 69, .16), var(--surface)); border-color: rgba(198, 30, 69, .45); }
+[data-tema='oscuro'] .webpay b { color: #fb7185; }
+
+/* Chat y LicitAsist (burbujas, fondo de mensajes y cuadro de escritura) */
+[data-tema='oscuro'] .chat, [data-tema='oscuro'] .chat-input { background: var(--surface); }
+[data-tema='oscuro'] .chat-msgs { background: linear-gradient(180deg, var(--bg), #0e1528); }
+[data-tema='oscuro'] .chat-day { background: var(--surface-2); }
+[data-tema='oscuro'] .bubble.other { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+[data-tema='oscuro'] .lia-grupo.on { color: #5eead4; }
+
+/* Avisos de colores (verificación, 2FA, LicitAsist, errores) */
+[data-tema='oscuro'] .alert-ok { color: #6ee7b7; }
+[data-tema='oscuro'] .alert-warn, [data-tema='oscuro'] .alert-warn .link-btn { color: #fcd34d; }
+[data-tema='oscuro'] .alert-err { color: #fca5a5; }
+[data-tema='oscuro'] .tdp-ia.bloqueado p { color: #fcd34d; }
+[data-tema='oscuro'] .lia-veredicto.tono-green h3 { color: #6ee7b7; } [data-tema='oscuro'] .lia-veredicto.tono-amber h3 { color: #fcd34d; } [data-tema='oscuro'] .lia-veredicto.tono-red h3 { color: #fca5a5; }
+
+/* Documentos, visor y detalle de licitación */
+[data-tema='oscuro'] .doc-list li { background: var(--surface); }
+[data-tema='oscuro'] .doc-visor { background: var(--surface-2); }
+[data-tema='oscuro'] .tdp-leyenda .sw.mk { background: var(--surface); }
+
+/* Vista panorámica del Licitador (línea de tiempo, rango de presupuesto y gráficos) */
+[data-tema='oscuro'] .pan-hito { background: var(--surface); }
+[data-tema='oscuro'] .pan-ya .pan-barra { background: var(--surface-2); }
+[data-tema='oscuro'] .pan-rango div { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 35%, var(--surface)), var(--accent)); }
+[data-tema='oscuro'] .pan-dia-col div { background: color-mix(in srgb, var(--accent) 45%, var(--surface)); }
+
+/* Detalles finales */
+[data-tema='oscuro'] .chart-punto { fill: var(--surface); }
+[data-tema='oscuro'] .dosf-qr img { border-color: var(--border); }   /* el QR sigue con fondo blanco para que se pueda escanear */

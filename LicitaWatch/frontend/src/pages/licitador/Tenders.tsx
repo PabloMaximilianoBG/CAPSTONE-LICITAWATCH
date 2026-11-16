@@ -7,6 +7,7 @@ import { navigate } from '../../lib/router'
 import { Icon } from '../../lib/icons'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { fechaCorta, tipoArchivo } from '../../lib/format'
+import { lanzarConfeti } from '../../lib/confeti'
 import { DocumentosSolicitados, PanelPublicar, SugerenciaPresupuesto, plantillaPara } from './PublicarAyudas'
 
 /** Fecha (aaaa-mm-dd, hora local) desde la que se puede cerrar una licitación publicada hoy. */
@@ -159,6 +160,7 @@ export function TenderForm() {
         documentosRequeridos: pedidos,
       })
       toast.ok('¡Licitación publicada! Ya es visible para las Pymes.')
+      lanzarConfeti()
       navigate(`/app/licitacion/${l.id}`)
     } catch (err) { toast.error((err as Error).message) } finally { setEnviando(false) }
   }

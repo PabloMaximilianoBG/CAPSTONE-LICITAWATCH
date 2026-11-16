@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useState } from 'react'
 import type { PuntoMensual } from '../api/types'
 
@@ -103,12 +104,12 @@ export function AreaChart({ datos, formato = (n) => String(n), color = 'var(--ac
           </g>
         )
       })}
-      <path d={area} fill={`url(#${id})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+      <path d={area} fill={`url(#${id})`} className="chart-area" />
+      <path d={line} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" pathLength={1} className="chart-linea" />
       {pts.map((p, i) => (
         <g key={p.d.mes} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
           <rect x={p.x - 24} y={pad.t} width={48} height={ih} fill="transparent" />
-          <circle cx={p.x} cy={p.y} r={hover === i ? 6 : 4} fill="#fff" stroke={color} strokeWidth={3} />
+          <circle cx={p.x} cy={p.y} r={hover === i ? 6 : 4} fill="#fff" stroke={color} strokeWidth={3} className="chart-punto" style={{ animationDelay: `${0.25 + i * 0.12}s` }} />
           <text x={p.x} y={H - 8} textAnchor="middle" className="chart-tick">
             {p.d.mes}
           </text>
@@ -132,7 +133,7 @@ export interface Segmento {
   color: string
 }
 
-export function Donut({ segmentos, centro, subtitulo, leyenda = true }: { segmentos: Segmento[]; centro: string; subtitulo?: string; leyenda?: boolean }) {
+export function Donut({ segmentos, centro, subtitulo, leyenda = true }: { segmentos: Segmento[]; centro: ReactNode; subtitulo?: string; leyenda?: boolean }) {
   const total = segmentos.reduce((s, x) => s + x.valor, 0) || 1
   const R = 52
   const C = 2 * Math.PI * R
@@ -156,6 +157,7 @@ export function Donut({ segmentos, centro, subtitulo, leyenda = true }: { segmen
               strokeDashoffset={-acc}
               transform="rotate(-90 70 70)"
               strokeLinecap="butt"
+              className="dona-seg"
             />
           )
           acc += len

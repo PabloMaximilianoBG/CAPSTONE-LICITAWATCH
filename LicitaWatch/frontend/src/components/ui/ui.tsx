@@ -154,14 +154,16 @@ export function Progress({ valor, max, tono = 'accent' }: { valor: number; max: 
   const pct = Math.min(100, (valor / Math.max(1, max)) * 100)
   return <div className="progress"><div className={`progress-fill ${tono}`} style={{ width: `${pct}%` }} /></div>
 }
-export function StatCard({ icon, label, valor, delta, tono = 'accent', extra }: { icon: IconName; label: string; valor: ReactNode; delta?: string; tono?: 'accent' | 'green' | 'amber' | 'violet' | 'red'; extra?: ReactNode }) {
+export function StatCard({ icon, label, valor, delta, deltaTono, tono = 'accent', extra }: {
+  icon: IconName; label: string; valor: ReactNode; delta?: string; deltaTono?: 'sube' | 'baja' | 'igual'; tono?: 'accent' | 'green' | 'amber' | 'violet' | 'red'; extra?: ReactNode
+}) {
   return (
     <div className="stat">
       <span className={`stat-icon tone-${tono}`}><Icon name={icon} size={20} /></span>
       <div className="stat-body">
         <span className="stat-label">{label}</span>
         <b className="stat-value">{valor}</b>
-        {delta && <span className="stat-delta">{delta}</span>}
+        {delta && <span className={`stat-delta ${deltaTono ?? ''}`}>{delta}</span>}
       </div>
       {extra}
     </div>

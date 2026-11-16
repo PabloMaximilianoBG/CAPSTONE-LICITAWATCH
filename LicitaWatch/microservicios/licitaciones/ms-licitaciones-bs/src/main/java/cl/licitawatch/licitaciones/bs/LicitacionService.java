@@ -450,7 +450,7 @@ public class LicitacionService {
         List<Post> recibidas = mias.isEmpty() ? List.of() : posts("?licitacionIds=" + junta(mias.stream().map(Lic::id).toList()));
         return new ResumenLicitador(mias.size(), mias.stream().filter(l -> "Abierta".equals(estadoEfectivo(l))).count(), mias.stream().filter(l -> es(l, "Adjudicada")).count(),
                 recibidas.size(), recibidas.stream().filter(p -> es(p, "Pendiente")).count(), porMes(recibidas.stream().map(Post::fechaPostulacion).toList()),
-                dtos(mias.stream().limit(3).toList()));
+                dtos(mias.stream().limit(4).toList()));
     }
 
     public ResumenPyme resumenPyme(long pymeId) {

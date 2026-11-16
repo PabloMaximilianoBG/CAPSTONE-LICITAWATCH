@@ -3,6 +3,7 @@ import { api } from '../../api'
 import type { Licitacion, Postulacion, PulsoLicitacion, RadarPymes } from '../../api/types'
 import { Avatar, Badge, Card, CardHeader, EmptyState, Progress, tonoEstado, useAsync, type Tono } from '../../components/ui/ui'
 import { ChileMap } from '../../components/app/ChileMap'
+import { CuentaRegresiva, conReloj } from '../../components/app/CuentaRegresiva'
 import { useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { clp, diasHasta, duracionTexto, fechaCorta } from '../../lib/format'
@@ -186,7 +187,7 @@ export function LineaDeTiempo({ l, total, dias, abierta, adjudicacion = ADJ_LICI
   return (
     <Card className="pan-alto">
       <CardHeader icon="clock" title="Línea de tiempo"
-        action={abierta ? <Badge tono={tono}>{dias < 1 ? 'Cierra hoy' : `Cierra en ${dias} día${dias === 1 ? '' : 's'}`}</Badge> : <Badge tono={tonoEstado(l.estado)}>{l.estado === 'Abierta' ? 'Cerrada' : l.estado}</Badge>} />
+        action={abierta ? <Badge tono={tono}>{conReloj(l.fechaCierre) ? <CuentaRegresiva hasta={l.fechaCierre} /> : `Cierra en ${dias} día${dias === 1 ? '' : 's'}`}</Badge> : <Badge tono={tonoEstado(l.estado)}>{l.estado === 'Abierta' ? 'Cerrada' : l.estado}</Badge>} />
       <ol className="pan-linea">
         {pasos.map((p) => (
           <li key={p.t} className={p.e}>

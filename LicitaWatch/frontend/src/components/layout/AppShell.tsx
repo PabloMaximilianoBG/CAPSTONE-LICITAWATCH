@@ -6,6 +6,9 @@ import { Link, isActive, navigate, useLocation } from '../../lib/router'
 import { useAuth } from '../../context/AuthContext'
 import { Avatar, Badge, Button, Modal } from '../ui/ui'
 import { Logo } from './Logo'
+import { Recorrido } from '../app/Recorrido'
+import { useTema } from '../../lib/tema'
+import { useGuardadas } from '../../lib/guardadas'
 import { hace } from '../../lib/format'
 import { esPremium } from '../../lib/plan'
 
@@ -31,6 +34,7 @@ const NAV: Record<Rol, { titulo?: string; items: Item[] }[]> = {
     { titulo: 'Principal', items: [
       { to: '/app', label: 'Panel de control', icon: 'grid', exact: true },
       { to: '/app/explorar', label: 'Explorar licitaciones', icon: 'search' },
+      { to: '/app/guardadas', label: 'Guardadas', icon: 'star' },
       { to: '/app/postulaciones', label: 'Mis postulaciones', icon: 'send' },
     ] },
     { titulo: 'Herramientas', items: [
@@ -158,6 +162,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState(false)
   const [premium, setPremium] = useState(false)
   const notif = useNotificaciones()
+  const guardadas = useGuardadas(sesion?.usuario.rol === 'PYME' ? sesion.usuario.id : undefined)
+  // Campana viva: mientras haya notificaciones sin leer, la campana «suena» al entrar y luego cada 6 s
+  // (y de inmediato cuando llega una nueva); el número rojo aparece con un salto.
+  const [sonando, setSonando] = useState(false)
+  const previas = useRef(0)
+  useEffect(() => {
+    if (notif.noLeidas === 0) { previas.current = 0; return }
+    const sonar = () => { setSonando(true); setTimeout(() => setSonando(false), 1300) }
+    const primera = setTimeout(sonar, notif.noLeidas > previas.current ? 800 : 6_000)
+    previas.current = notif.noLeidas
+    const cada = setInterval(sonar, 6_000)
+    return () => { clearTimeout(primera); clearInterval(cada) }
+  }, [notif.noLeidas])
   const refCampana = useRef<HTMLDivElement>(null)
   const refUsuario = useRef<HTMLDivElement>(null)
 
@@ -174,6 +191,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (sesion?.usuario.rol === 'PYME') api.miSuscripcion().then((s) => setPremium(esPremium(s))).catch(() => undefined)
   }, [sesion?.usuario.rol, path])
 
+  const { tema, alternar } = useTema(sesion?.usuario.rol === 'LICITADOR' || sesion?.usuario.rol === 'PYME')
   if (!sesion) return null
   const { usuario: u, perfil } = sesion
   const grupos = NAV[u.rol]
@@ -208,6 +226,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <Icon name={i.icon} size={19} />
                     <span>{i.label}</span>
                     {i.to === '/app/notificaciones' && notif.noLeidas > 0 && <em>{notif.noLeidas}</em>}
+                    {i.to === '/app/guardadas' && guardadas.ids.length > 0 && <em className="em-suave">{guardadas.ids.length}</em>}
                     {i.to === '/app/asistente' && !premium && <Icon name="lock" size={14} className="sb-lock" />}
                   </Link>
                 )
@@ -243,8 +262,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               ? <Badge tono="teal" icon="crown">Premium</Badge>
               : <Link to="/app/suscripcion" className="btn btn-soft btn-sm"><Icon name="crown" size={16} /><span>Mejorar plan</span></Link>)}
             {u.rol === 'ADMIN' && <Badge tono="violet" icon="shield">Administrador</Badge>}
+            {(u.rol === 'LICITADOR' || u.rol === 'PYME') && (
+              <button className="icon-btn tema-btn" onClick={alternar} aria-label={tema === 'oscuro' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} title={tema === 'oscuro' ? 'Modo claro' : 'Modo oscuro'}>
+                <Icon name={tema === 'oscuro' ? 'sun' : 'moon'} size={20} />
+              </button>
+            )}
             <div className="menu-wrap" ref={refCampana}>
-              <button className="icon-btn bell" onClick={() => { setCampana((v) => !v); setUsuario(false) }} aria-label="Notificaciones">
+              <button className={`icon-btn bell ${sonando ? 'sonando' : ''}`} onClick={() => { setCampana((v) => !v); setUsuario(false) }} aria-label="Notificaciones">
                 <Icon name="bell" size={21} />
                 {notif.noLeidas > 0 && <i>{notif.noLeidas > 9 ? '9+' : notif.noLeidas}</i>}
               </button>
@@ -281,6 +305,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <main className="content">{children}</main>
+        {(u.rol === 'LICITADOR' || u.rol === 'PYME') && <Recorrido rol={u.rol} usuarioId={u.id} nombre={perfil.nombreContacto ?? ''} creadaAt={u.createdAt} />}
         {u.rol === 'PYME' && <AvisoRubro usuarioId={u.id} pendientes={notif.pendientes} />}
       </div>
     </div>
