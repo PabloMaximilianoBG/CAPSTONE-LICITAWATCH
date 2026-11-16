@@ -6,7 +6,7 @@ import { EXT_POSTULACION, MAX_DOCUMENTO_BYTES, MAX_DOCUMENTOS, MAX_PUBLICAR_BYTE
 import { Avatar, Badge, Button, Card, CardHeader, Cargando, EmptyState, Field, Modal, Progress, Textarea, tonoEstado, useAsync, useToast } from '../../components/ui/ui'
 import { VolverLink } from '../../components/app/shared'
 import { TenderPanorama } from '../licitador/TenderPanorama'
-import { ConfianzaLicitador, RedactarConIA, TenderDetailPyme } from '../pyme/TenderDetailPyme'
+import { ConfianzaLicitador, RedactarConIA, SoloPremium, TenderDetailPyme } from '../pyme/TenderDetailPyme'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { Icon } from '../../lib/icons'
 import { navigate } from '../../lib/router'
@@ -92,6 +92,7 @@ export function TenderDetail({ id }: { id: number }) {
   const abierta = l.estado === 'Abierta' && dias >= 0
   const puedeEditarDocs = esDueno && abierta
   const restantes = sub.data ? Math.max(0, sub.data.plan.postulacionesMes - sub.data.postulacionesUsadas) : 0
+  const premiumPyme = rol === 'PYME' && sub.data ? esPremium(sub.data) : undefined   // undefined = cargando (no se muestra ni bloqueo ni detalle)
   const volver = rol === 'PYME' ? { to: '/app/explorar', t: 'Explorar licitaciones' } : rol === 'ADMIN' ? { to: '/app/licitaciones-admin', t: 'Licitaciones' } : { to: '/app/licitaciones', t: 'Mis licitaciones' }
 
   const recargar = () => { lic.recargar(); posts.recargar(); mias.recargar(); sub.recargar() }
@@ -182,7 +183,8 @@ export function TenderDetail({ id }: { id: number }) {
     <Card>
       <CardHeader icon="building" title="Publicada por" />
       <div className="who"><Avatar nombre={l.licitadorNombre} size={46} /><div><b>{l.licitadorNombre}</b><small>Publicada el {fechaCorta(l.createdAt)}</small></div></div>
-      {rol === 'PYME' && <ConfianzaLicitador licitadorId={l.licitadorId} />}
+      {rol === 'PYME' && premiumPyme && <ConfianzaLicitador licitadorId={l.licitadorId} />}
+      {rol === 'PYME' && premiumPyme === false && <SoloPremium>El historial del Licitador (publicadas y adjudicadas) es parte de Premium.</SoloPremium>}
       {!esDueno && l.presupuestoMax && <p className="muted-p">Presupuesto máximo referencial: <b>{clp(l.presupuestoMax)}</b></p>}
     </Card>
   )
@@ -221,6 +223,7 @@ export function TenderDetail({ id }: { id: number }) {
       ) : abierta ? (
         <>
           <CardHeader icon="send" title="Postular a esta licitación" />
+          {premiumPyme && <p className="tdp-destacada"><Icon name="crown" size={15} />Tu postulación aparecerá destacada ante el Licitador.</p>}
           {sub.data && (
             <div className="quota">
               <div><b>{restantes}</b> de {sub.data.plan.postulacionesMes} postulaciones disponibles este mes</div>
@@ -379,12 +382,14 @@ export function TenderDetail({ id }: { id: number }) {
             <div><Icon name="pin" size={18} /><span>Región</span><b>{cat.region(l.regionId)}</b></div>
             <div><Icon name="calendar" size={18} /><span>Cierre</span><b>{fechaCorta(l.fechaCierre)}</b></div>
             {l.duracionMeses && <div><Icon name="briefcase" size={18} /><span>Duración del proyecto</span><b>{duracionTexto(l.duracionMeses)}</b></div>}
-            <div><Icon name="users" size={18} /><span>Postulantes</span><b>{l.postulantes}{l.maxPostulantes ? ` / ${l.maxPostulantes}` : ''}</b></div>
+            {rol === 'PYME' && !premiumPyme
+              ? <div><Icon name="users" size={18} /><span>Cupos</span><b>{l.maxPostulantes ? `${l.maxPostulantes} máx.` : 'Sin límite'}</b></div>
+              : <div><Icon name="users" size={18} /><span>Postulantes</span><b>{l.postulantes}{l.maxPostulantes ? ` / ${l.maxPostulantes}` : ''}</b></div>}
           </div>
         </div>
       </Card>
 
-      {rol === 'PYME' ? <TenderDetailPyme l={l} perfil={sesion!.perfil} documentos={docsLista} postular={postularCard} publicadaPor={publicadaCard} /> : <div className="grid-main">
+      {rol === 'PYME' ? <TenderDetailPyme l={l} perfil={sesion!.perfil} premium={premiumPyme} documentos={docsLista} postular={postularCard} publicadaPor={publicadaCard} /> : <div className="grid-main">
         <div className="stack">
           <Card>
             <CardHeader icon="file" title="Descripción" />

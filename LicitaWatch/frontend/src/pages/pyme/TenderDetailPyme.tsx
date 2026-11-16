@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { api } from '../../api'
 import { ApiError } from '../../api/errors'
 import type { Licitacion, Perfil } from '../../api/types'
-import { Badge, Button, Card, CardHeader, useAsync } from '../../components/ui/ui'
+import { Badge, Button, Card, CardHeader, Progress, useAsync } from '../../components/ui/ui'
 import { TenderCard } from '../../components/app/shared'
 import { ChileMap } from '../../components/app/ChileMap'
 import { LineaDeTiempo, separarRequisitos } from '../licitador/TenderPanorama'
@@ -17,9 +17,11 @@ import { Link, navigate } from '../../lib/router'
 
 const ADJ_PYME = { hecha: 'El Licitador eligió a una Pyme y abrió el chat', pendiente: 'El Licitador elige una postulación y se abre el chat con esa Pyme' }
 
-export function TenderDetailPyme({ l, perfil, documentos, postular, publicadaPor }: {
+export function TenderDetailPyme({ l, perfil, premium, documentos, postular, publicadaPor }: {
   l: Licitacion
   perfil: Perfil
+  /** Plan de la Pyme: Premium ve el detalle de compatibilidad, la competencia y la confianza del Licitador. undefined = cargando. */
+  premium?: boolean
   /** Lista de documentos con ver y descargar, tal como la arma TenderDetail. */
   documentos: ReactNode
   /** Tarjeta «Postular» (o «Tu postulación») de TenderDetail. */
@@ -47,13 +49,16 @@ export function TenderDetailPyme({ l, perfil, documentos, postular, publicadaPor
             <CardHeader icon="paperclip" title={`Documentos adjuntos${l.documentos.length ? ` (${l.documentos.length})` : ''}`} />
             {documentos}
           </Card>
-          <DondeSeEjecuta l={l} regionPyme={regionPyme} />
+          <div className="grid-2-eq tdp-fila">
+            <DondeSeEjecuta l={l} regionPyme={regionPyme} />
+            <LineaDeTiempo l={l} total={l.postulantes} dias={dias} abierta={abierta} adjudicacion={ADJ_PYME} />
+          </div>
+          {publicadaPor}
         </div>
         <div className="stack">
-          <Compatibilidad l={l} perfil={perfil} regionPyme={regionPyme} />
+          <Compatibilidad l={l} perfil={perfil} regionPyme={regionPyme} premium={premium} />
+          <Competencia l={l} premium={premium} />
           {postular}
-          {publicadaPor}
-          <LineaDeTiempo l={l} total={l.postulantes} dias={dias} abierta={abierta} adjudicacion={ADJ_PYME} />
         </div>
       </div>
       <Similares l={l} />
@@ -61,9 +66,17 @@ export function TenderDetailPyme({ l, perfil, documentos, postular, publicadaPor
   )
 }
 
-function Compatibilidad({ l, perfil, regionPyme }: { l: Licitacion; perfil: Perfil; regionPyme?: number }) {
+/** Aviso corto de función Premium (candado + frase + enlace a Mi suscripción); nunca un bloque grande vacío. */
+export function SoloPremium({ children }: { children: ReactNode }) {
+  return <p className="tdp-premium"><Icon name="lock" size={13} /><span>{children} <Link to="/app/suscripcion">Mejorar plan</Link></span></p>
+}
+
+function Compatibilidad({ l, perfil, regionPyme, premium }: { l: Licitacion; perfil: Perfil; regionPyme?: number; premium?: boolean }) {
   const cat = useCatalogos()
-  const { pct, chips } = compatibilidad(l, perfil, regionPyme, cat.tamano)
+  const todo = compatibilidad(l, perfil, regionPyme, cat.tamano)
+  const pct = todo.pct
+  // Estándar: el % y si calza rubro y región. Premium: además el tamaño ideal y qué le falta del perfil.
+  const chips = premium ? todo.chips : todo.chips.slice(0, 2)
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--amber)' : 'var(--red)'
   return (
     <Card>
@@ -75,7 +88,40 @@ function Compatibilidad({ l, perfil, regionPyme }: { l: Licitacion; perfil: Perf
           {chips.map((c) => <Badge key={c.texto} tono={c.aviso ? 'amber' : c.ok ? 'green' : 'gray'} icon={c.aviso ? 'alert' : c.ok ? 'check' : 'x'}>{c.texto}</Badge>)}
         </div>
       </div>
-      {chips.some((c) => c.aviso) && <p className="pan-nota">Completa tu perfil en <Link to="/app/perfil">Mi perfil</Link> para subir tu compatibilidad.</p>}
+      {premium === false
+        ? <SoloPremium>El detalle (tamaño ideal y qué te falta del perfil) es parte de Premium.</SoloPremium>
+        : chips.some((c) => c.aviso) && <p className="pan-nota">Completa tu perfil en <Link to="/app/perfil">Mi perfil</Link> para subir tu compatibilidad.</p>}
+    </Card>
+  )
+}
+
+/** Competencia (Premium): postulaciones recibidas, cupos que quedan e indicador baja / media / alta. Estándar: solo el aviso. */
+function Competencia({ l, premium }: { l: Licitacion; premium?: boolean }) {
+  if (premium === undefined) return null
+  if (!premium) return (
+    <Card>
+      <CardHeader icon="users" title="Competencia" />
+      <SoloPremium>Mira cuántas Pymes compiten, los cupos que quedan y qué tan reñida está.</SoloPremium>
+    </Card>
+  )
+  const n = l.postulantes, max = l.maxPostulantes
+  const quedan = max ? Math.max(0, max - n) : undefined
+  const ratio = max ? n / max : undefined
+  const nivel = ratio != null ? (ratio < 0.4 ? 0 : ratio < 0.75 ? 1 : 2) : n <= 2 ? 0 : n <= 6 ? 1 : 2
+  const NIVELES = [
+    { t: 'Baja', tono: 'green' as const, d: 'Buen momento para postular: aún hay pocas propuestas.' },
+    { t: 'Media', tono: 'amber' as const, d: 'Ya hay varias propuestas: destaca tu experiencia en el mensaje.' },
+    { t: 'Alta', tono: 'red' as const, d: max && quedan === 0 ? 'Se completaron los cupos.' : 'Muchas propuestas: un mensaje a la medida marca la diferencia.' },
+  ]
+  return (
+    <Card>
+      <CardHeader icon="users" title="Competencia" action={<Badge tono={NIVELES[nivel].tono}>{NIVELES[nivel].t}</Badge>} />
+      <div className="tdp-confianza tdp-competencia">
+        <div><b>{n}</b><span>Postulaci{n === 1 ? 'ón' : 'ones'}</span></div>
+        <div><b>{quedan ?? '∞'}</b><span>{max ? `Cupos libres de ${max}` : 'Sin límite de cupos'}</span></div>
+      </div>
+      {max ? <Progress valor={n} max={max} tono={nivel === 2 ? 'red' : nivel === 1 ? 'amber' : 'accent'} /> : null}
+      <p className="pan-nota">{NIVELES[nivel].d}</p>
     </Card>
   )
 }
