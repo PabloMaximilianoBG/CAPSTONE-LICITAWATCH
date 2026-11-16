@@ -976,8 +976,11 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     await delay()
     const db = loadDb()
     const u = exigir(db, 'PYME')
-    db.suscripciones.filter((s) => s.usuarioId === u.id && s.estado === 'Activa').forEach((s) => { s.estado = 'Cancelada' })
+    const activas = db.suscripciones.filter((s) => s.usuarioId === u.id && s.estado === 'Activa')
+    const eraPremium = activas.some((s) => s.planId !== 1)
+    activas.forEach((s) => { if (s.planId !== 1) s.canceladaAt = ahora(); s.estado = 'Cancelada' })   // la fecha queda en el historial
     db.suscripciones.push({ id: nextId(db, 'suscripcion'), usuarioId: u.id, planId: 1, estado: 'Activa', fechaInicio: ahora() })
+    if (eraPremium) correo(db, u.id, 'Cancelaste tu suscripción Premium de LicitaWatch', 'Tu suscripción Premium fue cancelada. Desde hoy estás en el plan Estándar: 3 postulaciones al mes, sin LicitAsist ni «Redactar con IA».', '/app/suscripcion', 'Volver a Premium')
     saveDb()
     return mockApi.miSuscripcion()
   },
@@ -985,7 +988,14 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     await delay()
     const db = loadDb()
     const u = exigir(db, 'PYME')
-    return clon(db.ventas.filter((v) => v.usuarioId === u.id))
+    // Pagos y cancelaciones (como el backend), el más reciente primero.
+    // La cancelación muestra el método y la transacción de la compra cancelada (la venta Premium aprobada anterior a la cancelación), con monto $0.
+    const cancelaciones = db.suscripciones.filter((s) => s.usuarioId === u.id && s.canceladaAt).map((s) => {
+      const compra = db.ventas.filter((v) => v.usuarioId === u.id && v.estado === 'Aprobado' && v.fecha <= s.canceladaAt!).sort((a, b) => b.fecha.localeCompare(a.fecha))[0]
+      return { id: -s.id, usuarioId: u.id, usuarioNombre: nombreDe(db, u.id), plan: planPorId(s.planId).nombre, monto: 0, fecha: s.canceladaAt!,
+        metodo: compra?.metodo ?? null, estado: 'Cancelada' as const, idTransaccion: compra?.idTransaccion ?? null }
+    })
+    return [...clon(db.ventas.filter((v) => v.usuarioId === u.id)), ...cancelaciones].sort((a, b) => b.fecha.localeCompare(a.fecha))
   },
 
   async analizarLicitacion(licitacionId) {

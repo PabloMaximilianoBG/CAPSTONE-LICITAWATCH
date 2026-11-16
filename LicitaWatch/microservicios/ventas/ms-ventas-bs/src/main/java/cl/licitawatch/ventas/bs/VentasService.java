@@ -24,7 +24,7 @@ public class VentasService {
     // Filas tal como las entrega la capa BD.
     record PlanFila(Integer id, String nombre, Integer precioMensual) {}
     record HistorialFila(Long id, Integer planId, String plan, Integer precioAnterior, Integer precioNuevo, Long usuarioId, String motivo, LocalDateTime fecha) {}
-    record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado) {}
+    record SuscFila(Long id, Long usuarioId, Integer planId, String plan, String estado, Instant canceladaAt) {}
     record VentaFila(Long id, Long suscripcionId, long monto, LocalDate fecha, String idTransaccion, String metodo, String estadoPago) {}
     record CompraFila(SuscFila suscripcion, VentaFila venta) {}
 
@@ -165,8 +165,13 @@ public class VentasService {
                 ok ? r.codigoAutorizacion() : "", r.ultimos4(), r.cuotas());
     }
 
+    /** Opción A: se cancela y vuelve al plan Estándar de inmediato. Queda en el historial y se avisa por correo. */
     public SuscripcionDto cancelar(long usuarioId) {
-        activa(usuarioId).ifPresent(s -> cambiarEstado(s.id(), "Cancelada"));
+        activa(usuarioId).ifPresent(s -> {
+            cambiarEstado(s.id(), "Cancelada");
+            interno.notificar(urlNotif, usuarioId, "CORREO", "Cancelaste tu suscripción " + s.plan() + " de LicitaWatch",
+                    "Cancelaste tu suscripción " + s.plan() + ". Desde hoy estás en el plan Estándar.", true);
+        });
         return miSuscripcion(usuarioId);
     }
 
@@ -186,9 +191,26 @@ public class VentasService {
         return out;
     }
 
+    /**
+     * Historial de la Pyme: pagos (aprobados y rechazados) y cancelaciones, el más reciente primero. La cancelación muestra el método y la
+     * transacción de la compra que se canceló, con monto $0 (no hubo cobro ni devolución).
+     */
     public List<VentaDto> misPagos(long usuarioId) {
-        List<Long> ids = suscripcionesBd("?usuarioId=" + usuarioId).stream().map(SuscFila::id).toList();
-        return ids.isEmpty() ? List.of() : ventaDtos(ventasBd(ids));
+        List<SuscFila> ss = suscripcionesBd("?usuarioId=" + usuarioId);
+        if (ss.isEmpty()) return List.of();
+        List<VentaFila> filas = ventasBd(ss.stream().map(SuscFila::id).toList());
+        List<VentaDto> out = new ArrayList<>(ventaDtos(filas));
+        Map<Long, VentaFila> compraDe = new HashMap<>();   // suscripción → su pago aprobado
+        for (VentaFila v : filas) if ("Aprobado".equals(v.estadoPago())) compraDe.put(v.suscripcionId(), v);
+        String nombre = null;
+        for (SuscFila s : ss) if (s.canceladaAt() != null) {
+            if (nombre == null) nombre = nombreDe(usuarioId);
+            VentaFila c = compraDe.get(s.id());
+            out.add(new VentaDto(-s.id(), usuarioId, nombre, s.plan(), 0, s.canceladaAt(), c == null ? null : c.metodo(), "Cancelada",
+                    c == null ? null : c.idTransaccion()));   // id negativo: no choca con las ventas
+        }
+        out.sort(Comparator.comparing(VentaDto::fecha).reversed());
+        return out;
     }
     public List<VentaDto> todas() { return ventaDtos(ventasBd(null)); }
 

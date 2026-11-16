@@ -433,9 +433,11 @@ export interface Venta {
   plan: NombrePlan
   monto: number
   fecha: string
-  metodo: MetodoPago
-  estado: EstadoPago
-  idTransaccion: string
+  /** Vacío en las filas de cancelación. */
+  metodo?: MetodoPago | null
+  /** «Cancelada» = la Pyme canceló su suscripción ese día (fila del historial sin pago). */
+  estado: EstadoPago | 'Cancelada'
+  idTransaccion?: string | null
 }
 
 /** Webpay Plus: el navegador va a `url` enviando `token` como token_ws (POST). Sin token (modo simulado), basta con ir a `url`. */

@@ -28,6 +28,7 @@
 \echo '== licitawatch_ventas'
 \c licitawatch_ventas
 \ir migracion_precio_planes.sql
+\ir migracion_cancelacion_suscripcion.sql
 
 \echo '== licitawatch_chat'
 \c licitawatch_chat
