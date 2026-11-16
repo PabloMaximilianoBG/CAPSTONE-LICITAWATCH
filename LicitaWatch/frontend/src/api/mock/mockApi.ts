@@ -240,6 +240,41 @@ function verificar2fa(db: DB, u: UsuarioDB, codigo: string) {
   throw new ApiError(`Código incorrecto. Te ${quedan === 1 ? 'queda 1 intento' : `quedan ${quedan} intentos`} antes de un bloqueo de 5 minutos.`, 400)
 }
 
+// ---------- LicitAsist razona por la Pyme (modo simulado: mismas reglas de puntaje que el backend, sin IA) ----------
+function exigirPremiumMock(db: DB) {
+  const u = exigir(db, 'PYME')
+  if (planActual(db, u.id).plan.nombre !== 'Premium') throw new ApiError('Esta función de LicitAsist es un beneficio Premium. Mejora tu plan para usarla', 403)
+  return u
+}
+const diasAl = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000)
+function compatMock(l: Licitacion, p: Perfil) {
+  const ideal = l.presupuestoMax == null ? undefined : l.presupuestoMax <= 5_000_000 ? 1 : l.presupuestoMax <= 25_000_000 ? 2 : 3
+  const region = CIUDADES.find((c) => c.id === p.ciudadId)?.regionId
+  return (l.rubroId === p.rubroId ? 40 : 0) + (region === l.regionId ? 30 : 0) + (p.tamanoEmpresaId && (ideal == null || ideal === p.tamanoEmpresaId) ? 15 : 0)
+    + ((p.descripcionEmpresa ?? '').trim().length >= 30 ? 15 : 0)
+}
+function competenciaMock(l: Licitacion) {
+  if (l.maxPostulantes) { const r = l.postulantes / l.maxPostulantes; return r < 0.4 ? 0 : r < 0.75 ? 1 : 2 }
+  return l.postulantes <= 2 ? 0 : l.postulantes <= 6 ? 1 : 2
+}
+function puntajeMock(l: Licitacion, p: Perfil) {
+  const c = competenciaMock(l), d = diasAl(l.fechaCierre)
+  return Math.round(compatMock(l, p) * 0.6 + (c === 0 ? 25 : c === 1 ? 12 : 0) + (d > 3 ? 15 : d >= 1 ? 7 : 0))
+}
+function requisitosMock(l: Licitacion) {
+  const out: string[] = []
+  let en = false
+  for (const x of l.descripcion.split('\n')) {
+    const t = x.trim()
+    if (/^REQUISITOS PARA POSTULAR/i.test(t)) { en = true; continue }
+    if (!en) continue
+    const m = t.match(/^(?:[-•*]|\d+[.)])\s+(.+)$/)
+    if (m) { if (!/^agrega otros requisitos/i.test(m[1])) out.push(m[1]) } else if (t) en = false
+  }
+  ;(l.documentosRequeridos ?? []).filter((d) => d.obligatorio).forEach((d) => out.push(`Documento: ${d.nombre}`))
+  return out.slice(0, 12)
+}
+
 /** Cierra la sesión de un token: deja de valer y queda en el historial con revocadaAt. */
 function revocar(db: DB, token: string) {
   delete db.sesiones[token]
@@ -953,6 +988,62 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     return clon(db.ventas.filter((v) => v.usuarioId === u.id))
   },
 
+  async analizarLicitacion(licitacionId) {
+    await delay(1300)
+    const db = loadDb()
+    const u = exigirPremiumMock(db)
+    const lDb = db.licitaciones.find((x) => x.id === licitacionId)
+    if (!lDb) throw new ApiError('La licitación no existe.', 404)
+    if (lDb.estado !== 'Abierta' || diasAl(lDb.fechaCierre) < 0) throw new ApiError('Esta licitación ya no recibe postulaciones', 400)
+    const l = aLicitacion(db, lDb), p = perfilDe(db, u.id)
+    const comp = competenciaMock(l), dias = diasAl(l.fechaCierre), punt = puntajeMock(l, p)
+    const riesgos: string[] = []
+    if (dias <= 2) riesgos.push(dias < 1 ? 'Cierra hoy: tendrías que postular de inmediato.' : `Cierra en ${dias} días: poco tiempo para preparar la oferta.`)
+    const docs = (l.documentosRequeridos ?? []).filter((d) => d.obligatorio).length
+    if (docs) riesgos.push(`Pide ${docs} documento${docs === 1 ? '' : 's'} obligatorio${docs === 1 ? '' : 's'}: tenlos listos antes de postular.`)
+    if (comp === 2) riesgos.push('Competencia alta: ya hay muchas propuestas o quedan pocos cupos.')
+    if (l.rubroId !== p.rubroId) riesgos.push('No es de tu rubro: el Licitador podría preferir especialistas.')
+    // En el modo simulado no hay IA: los requisitos quedan «por revisar», como en el análisis básico del backend.
+    const requisitos = requisitosMock(l).map((texto) => ({ texto, estado: 'revisar' as const, nota: 'Verifica que lo cumples antes de postular.' }))
+    return {
+      licitacionId, titulo: l.titulo, veredicto: punt >= 70 ? 'postular' as const : punt >= 45 ? 'con-cuidado' as const : 'no-postular' as const, puntaje: punt,
+      compatibilidad: compatMock(l, p), competencia: (['Baja', 'Media', 'Alta'] as const)[comp], diasAlCierre: dias,
+      resumen: l.descripcion.replace(/\s+/g, ' ').slice(0, 260), requisitos, riesgos, ia: false,
+    }
+  },
+  async planDelMes() {
+    await delay(1100)
+    const db = loadDb()
+    const u = exigirPremiumMock(db)
+    const p = perfilDe(db, u.id)
+    const { plan } = planActual(db, u.id)
+    const postuladas = new Set(db.postulaciones.filter((x) => x.pymeId === u.id).map((x) => x.licitacionId))
+    const top = db.licitaciones.filter((l) => l.estado === 'Abierta' && diasAl(l.fechaCierre) >= 0 && !postuladas.has(l.id)).map((l) => aLicitacion(db, l))
+      .sort((a, b) => puntajeMock(b, p) - puntajeMock(a, p) || a.fechaCierre.localeCompare(b.fechaCierre)).slice(0, 5)
+    const motivo = (l: Licitacion) => {
+      const m = [l.rubroId === p.rubroId ? 'tu rubro' : '', l.regionId === CIUDADES.find((c) => c.id === p.ciudadId)?.regionId ? 'tu región' : '',
+        `competencia ${['baja', 'media', 'alta'][competenciaMock(l)]}`, diasAl(l.fechaCierre) < 1 ? 'cierra hoy' : `cierra en ${diasAl(l.fechaCierre)} días`].filter(Boolean).join(' · ')
+      return m.charAt(0).toUpperCase() + m.slice(1)
+    }
+    return { restantes: Math.max(0, plan.postulacionesMes - usadasEsteMes(db, u.id)), limite: plan.postulacionesMes,
+      recomendaciones: top.map((l) => ({ licitacion: l, puntaje: puntajeMock(l, p), motivo: motivo(l) })), ia: false }
+  },
+  async revisarMensaje(licitacionId, mensaje) {
+    await delay(1100)
+    const db = loadDb()
+    exigirPremiumMock(db)
+    if (mensaje.trim().length < 30) throw new ApiError('Escribe al menos unas líneas para que LicitAsist pueda revisarlas', 400)
+    const lDb = db.licitaciones.find((x) => x.id === licitacionId)
+    if (!lDb) throw new ApiError('La licitación no existe.', 404)
+    const m = mensaje.toLowerCase(), palabras = mensaje.trim().split(/\s+/).length
+    const fortalezas: string[] = [], mejoras: string[] = []
+    let punt = 40
+    if (palabras >= 60 && palabras <= 250) { punt += 15; fortalezas.push('Buen largo: ni muy corto ni excesivo.') } else mejoras.push(palabras < 60 ? 'Es muy breve: desarrolla por qué tu empresa calza.' : 'Es largo: resume lo esencial.')
+    if (/experiencia|años|proyectos|clientes|trabajos similares/.test(m)) { punt += 15; fortalezas.push('Mencionas experiencia.') } else mejoras.push('Menciona tu experiencia en trabajos similares.')
+    if (/plazo|días|semanas|inicio|disponib/.test(m)) { punt += 10; fortalezas.push('Indicas plazos o disponibilidad.') } else mejoras.push('Indica tu disponibilidad o plazos de inicio.')
+    if (mensaje.includes('[')) mejoras.push('Quedan textos entre [corchetes] por completar.')
+    return { puntaje: Math.min(100, punt), fortalezas, mejoras, version: null, ia: false }
+  },
   async redactarPostulacion(licitacionId) {
     await delay(1200)
     const db = loadDb()
@@ -988,7 +1079,32 @@ export const mockApi: Api & { resetDemo(): void; correos(): Promise<DB['correos'
     if (rubro) hallazgos = hallazgos.filter((l) => l.rubroId === rubro.id)
     else if (buscaMias) hallazgos = hallazgos.filter((l) => l.rubroId === perfil.rubroId)
     if (region) hallazgos = hallazgos.filter((l) => l.regionId === region.id)
-    if (/pronto|cierr|urgente/.test(q)) hallazgos = [...hallazgos].sort((a, b) => a.fechaCierre.localeCompare(b.fechaCierre))
+    if (/pronto|cierr|urgente|semana/.test(q)) hallazgos = [...hallazgos].filter((l) => !/semana/.test(q) || diasAl(l.fechaCierre) <= 7).sort((a, b) => a.fechaCierre.localeCompare(b.fechaCierre))
+    // Preguntas generales de las sugerencias (el backend real las responde con IA y el perfil de la Pyme).
+    const mias = db.postulaciones.filter((p) => p.pymeId === u.id)
+    if (/como van|mis postulaciones|estado de mis/.test(q)) {
+      if (!mias.length) return { rol: 'asistente', texto: 'Aún no tienes postulaciones. Te recomiendo empezar por las licitaciones de tu rubro que cierran pronto: pregúntame «¿Qué licitaciones de mi rubro están abiertas?».' }
+      const cuenta = (e: string) => mias.filter((p) => p.estado === e).length
+      return { rol: 'asistente', texto: `Tienes ${mias.length} postulación${mias.length === 1 ? '' : 'es'}:\n- Pendientes: ${cuenta('Pendiente')}\n- Aprobadas: ${cuenta('Aprobada')}\n- Rechazadas: ${cuenta('Rechazada')}\nLas pendientes esperan la revisión del Licitador; te avisaremos cuando decida.` }
+    }
+    if (/rechaz|mejorar si/.test(q)) {
+      return { rol: 'asistente', texto: 'Si te rechazaron, revisa tres cosas:\n- Que tu mensaje explique cómo cumples cada requisito, uno por uno.\n- Que menciones experiencia comprobable en trabajos similares.\n- Que indiques plazos y disponibilidad concretos.\nAntes de enviar la próxima, usa «Revisar mi mensaje» en la tarjeta Postular.' }
+    }
+    if (/perfil/.test(q)) {
+      const falta = [(perfil.descripcionEmpresa ?? '').trim().length < 30 ? 'una descripción de tu empresa' : '', !perfil.sitioWeb ? 'tu sitio web' : '', !perfil.tamanoEmpresaId ? 'el tamaño de tu empresa' : '', !perfil.telefono ? 'un teléfono' : ''].filter(Boolean)
+      return { rol: 'asistente', texto: falta.length ? `A tu perfil le falta: ${falta.join(', ')}. Completarlo en «Mi perfil» sube tu compatibilidad con las licitaciones y da más confianza a los Licitadores.` : 'Tu perfil está completo. Para ganar más, apunta a licitaciones de tu rubro y región con competencia baja: revisa «Mi plan del mes».' }
+    }
+    if (/consejo|buen mensaje/.test(q)) {
+      return { rol: 'asistente', texto: '3 consejos para tu mensaje:\n- Abre con por qué tu empresa calza con el alcance pedido.\n- Responde cada requisito con evidencia (experiencia, certificaciones, equipo).\n- Cierra con plazos de inicio y disponibilidad para coordinar.\nUsa «Redactar con IA» para un borrador y «Revisar mi mensaje» para pulirlo.' }
+    }
+    if (/documento/.test(q)) {
+      return { rol: 'asistente', texto: 'Lo más común en licitaciones privadas en Chile:\n- Certificado F30 de antecedentes laborales y previsionales.\n- Certificado de vigencia de la sociedad y carpeta tributaria.\n- Referencias o certificados de trabajos similares.\nAdemás, según el rubro: registro de contratistas (construcción), OS-10 (seguridad) o resolución sanitaria (alimentos).' }
+    }
+    if (/adjudica|chat/.test(q)) {
+      return { rol: 'asistente', texto: 'El Licitador revisa las postulaciones y aprueba la que prefiere. Al aprobarla, la licitación queda adjudicada a esa Pyme, las demás pendientes se rechazan y se abre automáticamente un chat privado entre ambos para coordinar el trabajo.' }
+    }
+    if (/competencia/.test(q)) hallazgos = [...hallazgos].sort((a, b) => db.postulaciones.filter((p) => p.licitacionId === a.id).length - db.postulaciones.filter((p) => p.licitacionId === b.id).length)
+    if (/mayor presupuesto/.test(q)) hallazgos = [...hallazgos].sort((a, b) => (b.presupuestoMax ?? 0) - (a.presupuestoMax ?? 0))
     if (/(como|cómo).*(postul|funciona)/.test(q)) {
       return { rol: 'asistente', texto: 'Para postular: 1) busca una licitación abierta, 2) revisa las bases, 3) presiona "Postular" y cuenta por qué tu empresa es la mejor opción. El Licitador aprobará o rechazará tu postulación y, si te adjudican, se abrirá un chat con él automáticamente.' }
     }

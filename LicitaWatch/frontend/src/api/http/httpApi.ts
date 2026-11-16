@@ -147,6 +147,9 @@ export const httpApi: Api = {
 
   preguntarAsistente: (texto) => post('/api/asistente/preguntar', { texto }),
   redactarPostulacion: (licitacionId) => post('/api/asistente/redactar-postulacion', { licitacionId }),
+  analizarLicitacion: (licitacionId) => post('/api/asistente/analizar-licitacion', { licitacionId }),
+  planDelMes: () => post('/api/asistente/plan-del-mes'),
+  revisarMensaje: (licitacionId, mensaje) => post('/api/asistente/revisar-mensaje', { licitacionId, mensaje }),
 
   estadisticasAdmin: () => get('/api/admin/estadisticas'),
   usuariosAdmin: (f?: FiltroUsuarios) => get('/api/admin/usuarios', { ...f }),

@@ -298,3 +298,42 @@ td.row-actions { display: table-cell; text-align: right; white-space: nowrap; } 
 .tdp-competencia { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tdp-competencia + .progress { margin: 4px 0 2px; }
 .tdp-destacada { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 10px; background: var(--teal-soft); color: #0f766e; font-size: 13px; font-weight: 600; }
+
+/* ---------- LicitAsist: analiza, prioriza y revisa por la Pyme (Premium) ---------- */
+.lia-acciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.lia-accion { display: flex; flex-direction: column; gap: 8px; } .lia-accion b { font-size: 15.5px; } .lia-accion p { margin: 0; color: var(--muted); font-size: 13.5px; flex: 1; }
+.lia-accion-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--teal-soft); color: var(--teal); }
+.lia-accion-pie { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; } .lia-accion-pie .muted-p { margin: 0; font-size: 12.5px; }
+.lia-titulo-chat { display: flex; align-items: center; gap: 8px; margin: 6px 0 -6px; font-size: 16px; }
+.lia-pensando { padding: 18px 0; }
+.lia-analisis { gap: 16px; } .lia-sub { margin: 0 0 8px; font-size: 14px; }
+.lia-veredicto { display: flex; align-items: center; gap: 18px; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--border); }
+.lia-veredicto .donut { flex: none; } .lia-veredicto .donut svg { width: 104px; height: 104px; }
+.lia-veredicto h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 18px; } .lia-veredicto p { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; }
+.lia-veredicto.tono-green { background: var(--green-soft); border-color: var(--green); } .lia-veredicto.tono-green h3 { color: #15803d; }
+.lia-veredicto.tono-amber { background: var(--amber-soft); border-color: var(--amber); } .lia-veredicto.tono-amber h3 { color: #92400e; }
+.lia-veredicto.tono-red { background: var(--red-soft); border-color: var(--red); } .lia-veredicto.tono-red h3 { color: #b91c1c; }
+.lia-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lia-reqs { display: flex; flex-direction: column; gap: 8px; } .lia-reqs li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); }
+.lia-reqs li > svg { flex: none; margin-top: 1px; } .lia-reqs li.ok > svg { color: var(--green); } .lia-reqs li.no > svg { color: var(--red); } .lia-reqs li.rev > svg { color: var(--amber); }
+.lia-reqs div { display: flex; flex-direction: column; gap: 2px; } .lia-reqs b { font-size: 13.5px; } .lia-reqs small { color: var(--muted); font-size: 12.5px; }
+.lia-riesgos { display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; } .lia-riesgos li { display: flex; gap: 8px; align-items: flex-start; } .lia-riesgos svg { flex: none; margin-top: 2px; color: var(--amber); }
+.lia-boton { margin-top: 12px; }
+.lia-revision { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: -4px; }
+.lia-revision-res { width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); font-size: 13px; }
+.lia-revision-top { display: flex; align-items: center; gap: 8px; } .lia-revision-top .icon-btn { margin-left: auto; }
+.lia-bien li, .lia-falta li { display: flex; gap: 6px; align-items: flex-start; margin-top: 3px; } .lia-bien svg { color: var(--green); flex: none; margin-top: 2px; } .lia-falta svg { color: var(--amber); flex: none; margin-top: 2px; }
+.lia-version { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; border-radius: 10px; background: var(--surface); border: 1px dashed var(--border-strong); }
+.lia-version small { color: var(--muted); font-weight: 700; text-transform: uppercase; font-size: 11px; letter-spacing: .04em; } .lia-version p { margin: 0; white-space: pre-line; }
+.lia-plan { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.lia-plan li { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.lia-plan-n { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; font-weight: 800; font-size: 15px; }
+.lia-plan-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .lia-plan-txt b { font-size: 14.5px; } .lia-plan-txt small { color: var(--muted); font-size: 12.5px; }
+.lia-plan-txt p { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0 0; font-size: 13px; color: #0f766e; } .lia-plan-txt p svg { flex: none; margin-top: 2px; }
+.lia-plan .btn { flex: none; text-decoration: none; }
+@media (max-width: 900px) { .lia-acciones { grid-template-columns: 1fr; } .lia-plan li { flex-wrap: wrap; } .lia-veredicto { flex-direction: column; text-align: center; } .lia-chips { justify-content: center; } }
+.lia-sugerencias { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 0; border-top: 1px solid var(--border); }
+.lia-sugerencias .chips { padding: 0; }
+.lia-grupos { display: flex; flex-wrap: wrap; gap: 6px; }
+.lia-grupo { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+.lia-grupo:hover { color: var(--text); } .lia-grupo.on { background: var(--teal-soft); color: #0f766e; }

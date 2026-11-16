@@ -6,6 +6,7 @@ import { Badge, Button, Card, CardHeader, Progress, useAsync } from '../../compo
 import { TenderCard } from '../../components/app/shared'
 import { ChileMap } from '../../components/app/ChileMap'
 import { LineaDeTiempo, separarRequisitos } from '../licitador/TenderPanorama'
+import { BotonMeConviene } from './LicitAsistAcciones'
 import { useCatalogos } from '../../context/AuthContext'
 import { Donut } from '../../lib/charts'
 import { compatibilidad } from '../../lib/compatibilidad'
@@ -89,8 +90,11 @@ function Compatibilidad({ l, perfil, regionPyme, premium }: { l: Licitacion; per
         </div>
       </div>
       {premium === false
-        ? <SoloPremium>El detalle (tamaño ideal y qué te falta del perfil) es parte de Premium.</SoloPremium>
-        : chips.some((c) => c.aviso) && <p className="pan-nota">Completa tu perfil en <Link to="/app/perfil">Mi perfil</Link> para subir tu compatibilidad.</p>}
+        ? <SoloPremium>El detalle y el análisis «¿Me conviene postular?» de LicitAsist son parte de Premium.</SoloPremium>
+        : <>
+          {chips.some((c) => c.aviso) && <p className="pan-nota">Completa tu perfil en <Link to="/app/perfil">Mi perfil</Link> para subir tu compatibilidad.</p>}
+          {premium && l.estado === 'Abierta' && diasHasta(l.fechaCierre) >= 0 && <div className="lia-boton"><BotonMeConviene licitacionId={l.id} /></div>}
+        </>}
     </Card>
   )
 }
