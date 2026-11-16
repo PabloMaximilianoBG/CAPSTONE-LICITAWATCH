@@ -28,7 +28,8 @@ export function Profile() {
   const guardar = async () => {
     if (!f.razonSocial.trim() || !f.nombreContacto.trim()) return setResultado({ ok: false, mensaje: 'Razón social y nombre de contacto son obligatorios.' })
     if (!validarEmail(f.emailContacto)) return setResultado({ ok: false, mensaje: 'El correo de contacto no es válido.' })
-    const _telD = (f.telefono ?? '').replace(/\D/g, '')
+    // El teléfono se guarda con el código de país («+56 9 1234 5678»): se valida el celular sin el 56.
+    const _telD = (f.telefono ?? '').replace(/^\s*\+?56\s*/, '').replace(/\D/g, '')
     if (_telD && (_telD.length !== 9 || !_telD.startsWith('9'))) return setResultado({ ok: false, mensaje: 'El teléfono debe ser un celular chileno válido (9 XXXX XXXX).' })
     setGuardando(true)
     try {

@@ -1,13 +1,22 @@
 import { api } from '../../api'
+import type { Licitacion, ResumenLicitador } from '../../api/types'
 import { AreaChart, Donut } from '../../lib/charts'
-import { Badge, Button, Card, CardHeader, Cargando, EmptyState, PageHeader, StatCard, tonoEstado, useAsync } from '../../components/ui/ui'
+import { Badge, Button, Card, CardHeader, Cargando, EmptyState, PageHeader, Progress, StatCard, tonoEstado, useAsync, type Tono } from '../../components/ui/ui'
 import { BannerCarousel, NotifPanel, TenderCard } from '../../components/app/shared'
+import { useAuth } from '../../context/AuthContext'
 import { Link, navigate } from '../../lib/router'
-import { Icon } from '../../lib/icons'
+import { Icon, type IconName } from '../../lib/icons'
+import { diasHasta, fechaCorta } from '../../lib/format'
 
 export function LicitadorDashboard() {
-  const { data: r, loading } = useAsync(() => api.resumenLicitador(), [])
-  if (loading || !r) return <Cargando />
+  const res = useAsync(() => api.resumenLicitador(), [])
+  const r = res.data
+  if (res.loading && !r) return <Cargando />
+  if (!r) return (
+    <Card><EmptyState icon="alert" titulo="No pudimos cargar tu panel" texto={res.error ?? 'Revisa tu conexión e inténtalo de nuevo.'}
+      accion={<Button icon="refresh" onClick={res.recargar}>Reintentar</Button>} /></Card>
+  )
+  const promedio = r.publicadas ? (r.postulacionesRecibidas / r.publicadas).toFixed(1).replace('.0', '').replace('.', ',') : '0'
   return (
     <div className="stack">
       <BannerCarousel slides={[
@@ -18,17 +27,22 @@ export function LicitadorDashboard() {
       <PageHeader title="Panel de control" subtitle="Resumen de tus licitaciones y postulaciones recibidas." actions={<Button icon="plus" onClick={() => navigate('/app/licitaciones/nueva')}>Publicar licitación</Button>} />
       <div className="grid-main">
         <div className="stack">
-          <div className="stats">
+          <div className="stats stats-3">
             <StatCard icon="file" label="Licitaciones publicadas" valor={r.publicadas} />
             <StatCard icon="clock" label="Abiertas" valor={r.abiertas} tono="green" />
-            <StatCard icon="users" label="Postulaciones recibidas" valor={r.postulacionesRecibidas} tono="violet" />
             <StatCard icon="award" label="Adjudicadas" valor={r.adjudicadas} tono="amber" />
+            <StatCard icon="users" label="Postulaciones recibidas" valor={r.postulacionesRecibidas} tono="violet" />
+            <StatCard icon="inbox" label="Por revisar" valor={r.pendientes} tono={r.pendientes > 0 ? 'red' : 'accent'} />
+            <StatCard icon="chart" label="Postulaciones por licitación" valor={promedio} tono="green" />
           </div>
           <div className="grid-2-eq">
-            <Card>
-              <CardHeader icon="trending" title="Postulaciones por mes" subtitle="Últimos 6 meses" />
-              <AreaChart datos={r.porMes} />
-            </Card>
+            <div className="stack">
+              <Card>
+                <CardHeader icon="trending" title="Postulaciones por mes" subtitle="Últimos 6 meses" />
+                <AreaChart datos={r.porMes} />
+              </Card>
+              <ProximosCierres />
+            </div>
             <Card>
               <CardHeader icon="chart" title="Estado de tus licitaciones" />
               <Donut centro={String(r.publicadas)} subtitulo="licitaciones" segmentos={[
@@ -52,6 +66,9 @@ export function LicitadorDashboard() {
         </div>
         <div className="stack">
           <NotifPanel />
+          <PrimerosPasos r={r} />
+          <AsiTeVen />
+          <AccesosRapidos />
           <Card className="tip-card">
             <Badge tono="blue" icon="sparkles">Consejo</Badge>
             <h4>Describe bien tu necesidad</h4>
@@ -63,4 +80,98 @@ export function LicitadorDashboard() {
     </div>
   )
 }
+
+/** Licitaciones abiertas que cierran antes (hasta 4), con la cuenta regresiva en verde, ámbar o rojo. */
+function ProximosCierres() {
+  const mias = useAsync(() => api.misLicitaciones(), [])
+  const abiertas = (mias.data ?? []).filter((l) => l.estado === 'Abierta' && diasHasta(l.fechaCierre) >= 0)
+    .sort((a, b) => a.fechaCierre.localeCompare(b.fechaCierre)).slice(0, 4)
+  const tono = (d: number): Tono => (d > 3 ? 'green' : d >= 1 ? 'amber' : 'red')
+  return (
+    <Card>
+      <CardHeader icon="calendar" title="Próximos cierres" subtitle="Tus licitaciones abiertas" />
+      {mias.loading && !mias.data ? <Cargando /> : abiertas.length === 0 ? (
+        <p className="muted-p dash-vacio">No tienes licitaciones abiertas. Cuando publiques una, verás aquí cuánto le queda para cerrar.</p>
+      ) : (
+        <ul className="dash-lista">
+          {abiertas.map((l: Licitacion) => {
+            const d = diasHasta(l.fechaCierre)
+            return (
+              <li key={l.id}>
+                <Link to={`/app/licitacion/${l.id}`} className="dash-item">
+                  <div><b title={l.titulo}>{l.titulo}</b><small>{l.postulantes} postulante{l.postulantes === 1 ? '' : 's'} · cierra el {fechaCorta(l.fechaCierre)}</small></div>
+                  <Badge tono={tono(d)}>{d < 1 ? 'Cierra hoy' : `${d} día${d === 1 ? '' : 's'}`}</Badge>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+/** Lista de primeros pasos con su avance; útil para cuentas nuevas (cuando está todo listo, lo celebra). */
+function PrimerosPasos({ r }: { r: ResumenLicitador }) {
+  const { sesion } = useAuth()
+  const seg = useAsync(() => api.seguridadCuenta(), [])
+  const p = sesion!.perfil
+  const pasos: { ok: boolean; texto: string; to: string }[] = [
+    { ok: !!p.telefono?.trim() && (p.descripcionEmpresa ?? '').trim().length >= 30, texto: 'Completa tu perfil (teléfono y descripción)', to: '/app/perfil' },
+    { ok: !!seg.data?.emailVerificado, texto: 'Verifica tu correo', to: '/app/configuracion' },
+    { ok: r.publicadas > 0, texto: 'Publica tu primera licitación', to: '/app/licitaciones/nueva' },
+    { ok: r.postulacionesRecibidas > 0 && r.pendientes === 0, texto: 'Revisa las postulaciones recibidas', to: '/app/licitaciones' },
+    { ok: !!seg.data?.dosFactoresActivo, texto: 'Activa la verificación en dos pasos', to: '/app/configuracion' },
+  ]
+  const hechos = pasos.filter((x) => x.ok).length
+  return (
+    <Card>
+      <CardHeader icon="checkcircle" title="Primeros pasos" subtitle={hechos === pasos.length ? '¡Todo listo! Tu cuenta está completa.' : `${hechos} de ${pasos.length} completados`} />
+      <Progress valor={hechos} max={pasos.length} tono={hechos === pasos.length ? 'accent' : 'amber'} />
+      <ul className="dash-pasos">
+        {pasos.map((x) => (
+          <li key={x.texto} className={x.ok ? 'ok' : ''}>
+            <span className="dash-check"><Icon name={x.ok ? 'check' : 'chevright'} size={13} /></span>
+            {x.ok ? <span>{x.texto}</span> : <Link to={x.to}>{x.texto}</Link>}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+/** Lo que ven las Pymes en «Publicada por»: publicadas, adjudicadas y desde cuándo está en la plataforma. */
+function AsiTeVen() {
+  const { sesion } = useAuth()
+  const c = useAsync(() => api.confianzaLicitador(sesion!.usuario.id), [])
+  if (!c.data) return null
+  return (
+    <Card>
+      <CardHeader icon="eye" title="Así te ven las Pymes" subtitle="Lo que muestran tus licitaciones en «Publicada por»" />
+      <div className="tdp-confianza">
+        <div><b>{c.data.publicadas}</b><span>Publicadas</span></div>
+        <div><b>{c.data.adjudicadas}</b><span>Adjudicadas</span></div>
+        <div><b>{fechaCorta(c.data.desde)}</b><span>En LicitaWatch desde</span></div>
+      </div>
+    </Card>
+  )
+}
+
+const ACCESOS: { to: string; label: string; icon: IconName }[] = [
+  { to: '/app/licitaciones/nueva', label: 'Publicar', icon: 'plus' },
+  { to: '/app/licitaciones', label: 'Mis licitaciones', icon: 'file' },
+  { to: '/app/chat', label: 'Chat', icon: 'chat' },
+  { to: '/app/configuracion', label: 'Configuración', icon: 'settings' },
+]
+function AccesosRapidos() {
+  return (
+    <Card>
+      <CardHeader icon="zap" title="Accesos rápidos" />
+      <div className="dash-accesos">
+        {ACCESOS.map((a) => <Link key={a.to} to={a.to} className="dash-acceso"><Icon name={a.icon} size={18} /><span>{a.label}</span></Link>)}
+      </div>
+    </Card>
+  )
+}
+
 export { tonoEstado }
