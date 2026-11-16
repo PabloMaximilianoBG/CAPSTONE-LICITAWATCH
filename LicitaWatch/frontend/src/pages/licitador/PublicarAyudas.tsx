@@ -7,8 +7,6 @@ import { clp, duracionTexto, fechaCorta } from '../../lib/format'
 
 /* Ayudas del formulario «Publicar licitación»: plantillas por rubro, indicador de calidad, cronograma y panel lateral. */
 
-/** Textos entre [corchetes] que la plantilla deja para completar. */
-export const PENDIENTE_PLANTILLA = /\[[^\]\n]+\]/
 
 const EJEMPLOS: Record<string, { alcance: string; requisitos: string[] }> = {
   'Construcción': { alcance: 'Ej: obras civiles de 200 m² en bodega: radier, tabiquería y terminaciones', requisitos: ['Inscripción vigente en registro de contratistas (si aplica)', 'Experiencia en obras similares (adjuntar referencias)', 'Prevencionista de riesgos y seguro de responsabilidad civil'] },
@@ -28,18 +26,18 @@ export function plantillaPara(rubro: string): string {
   const e = EJEMPLOS[rubro] ?? { alcance: 'Ej: qué necesitas, cantidades y dónde se realizará', requisitos: ['Experiencia en trabajos similares', 'Documentación legal y tributaria al día'] }
   return [
     'ALCANCE',
-    `[${e.alcance}]`,
+    e.alcance,
     '',
     'REQUISITOS PARA POSTULAR',
     ...e.requisitos.map((r) => `- ${r}`),
-    '- [Agrega otros requisitos o bórrala]',
+    '- Agrega otros requisitos o borra esta línea',
     '',
     'PLAZOS',
-    '- Inicio estimado: [fecha o semana]',
-    '- Plazo de entrega o hitos: [plazo]',
+    '- Inicio estimado: fecha o semana',
+    '- Plazo de entrega o hitos: plazo',
     '',
     'CONDICIONES DE PAGO',
-    '- [Ej: 30 días desde la recepción conforme de la factura]',
+    '- Ej: 30 días desde la recepción conforme de la factura',
   ].join('\n')
 }
 
@@ -52,7 +50,7 @@ export interface DatosCalidad {
 export function calidad(d: DatosCalidad) {
   const criterios = [
     { ok: d.titulo.trim().length >= 8, puntos: 15, texto: 'Título claro (mínimo 8 caracteres)' },
-    { ok: d.descripcion.trim().length >= 150 && !PENDIENTE_PLANTILLA.test(d.descripcion), puntos: 25, texto: 'Descripción completa (150+ caracteres, sin textos entre corchetes)' },
+    { ok: d.descripcion.trim().length >= 150, puntos: 25, texto: 'Descripción completa (150+ caracteres)' },
     { ok: !!d.rubroId && !!d.regionId, puntos: 10, texto: 'Rubro y región' },
     { ok: !!d.min || !!d.max, puntos: 15, texto: 'Presupuesto estimado' },
     { ok: d.cierreValido, puntos: 10, texto: 'Fecha de cierre' },

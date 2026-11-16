@@ -256,7 +256,7 @@ export interface PulsoLicitacion {
 }
 
 /** Días mínimos entre la publicación y la fecha de cierre (el backend también lo valida). */
-export const PLAZO_MINIMO_DIAS = 7
+export const PLAZO_MINIMO_DIAS = 5
 /** Duración máxima del contrato en meses (el backend también lo valida). */
 export const DURACION_MAX_MESES = 120
 

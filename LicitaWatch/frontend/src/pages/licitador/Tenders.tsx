@@ -7,7 +7,7 @@ import { navigate } from '../../lib/router'
 import { Icon } from '../../lib/icons'
 import { useAuth, useCatalogos } from '../../context/AuthContext'
 import { fechaCorta, tipoArchivo } from '../../lib/format'
-import { DocumentosSolicitados, PENDIENTE_PLANTILLA, PanelPublicar, SugerenciaPresupuesto, plantillaPara } from './PublicarAyudas'
+import { DocumentosSolicitados, PanelPublicar, SugerenciaPresupuesto, plantillaPara } from './PublicarAyudas'
 
 /** Fecha (aaaa-mm-dd, hora local) desde la que se puede cerrar una licitación publicada hoy. */
 function cierreMinimo(): string {
@@ -88,6 +88,17 @@ export function TenderForm() {
     return () => { vivo = false }
   }, [rubroId])
 
+  // Al corregir un campo se quita su error de «Publicar» sin esperar a volver a presionarlo
+  // (si el valor nuevo sigue siendo inválido, la validación en vivo de abajo lo vuelve a mostrar).
+  const limpiarError = (...claves: string[]) => setErrores((e) => (claves.some((k) => e[k]) ? Object.fromEntries(Object.entries(e).filter(([k]) => !claves.includes(k))) : e))
+  useEffect(() => limpiarError('titulo'), [titulo])
+  useEffect(() => limpiarError('descripcion'), [descripcion])
+  useEffect(() => limpiarError('rubroId'), [rubroId])
+  useEffect(() => limpiarError('regionId'), [regionId])
+  useEffect(() => limpiarError('cierre'), [cierre])
+  useEffect(() => limpiarError('duracion'), [duracion])
+  useEffect(() => limpiarError('max'), [min, max])
+
   // Validaciones en vivo (además de las del botón Publicar).
   const minCierre = cierreMinimo()
   const errCierre = cierre && cierre < minCierre ? `Da al menos ${PLAZO_MINIMO_DIAS} días para postular (desde el ${fechaCorta(minCierre + 'T12:00:00')})` : undefined
@@ -131,7 +142,6 @@ export function TenderForm() {
     const e: Record<string, string> = {}
     if (titulo.trim().length < 8) e.titulo = 'Describe el título (mínimo 8 caracteres)'
     if (descripcion.trim().length < 30) e.descripcion = 'Explica la necesidad con más detalle (mínimo 30 caracteres)'
-    else if (PENDIENTE_PLANTILLA.test(descripcion)) e.descripcion = 'Completa o borra los textos entre [corchetes] de la plantilla'
     if (!rubroId) e.rubroId = 'Selecciona un rubro'
     if (!regionId) e.regionId = 'Selecciona una región'
     if (!cierre) e.cierre = 'Define la fecha de cierre'
@@ -162,7 +172,7 @@ export function TenderForm() {
         <CardHeader icon="file" title="Información general" />
         <div className="form-grid">
           <Field label="Título" required error={errores.titulo} className="span-2"><Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej: Servicio de mantención de flota de grúas" maxLength={120} /></Field>
-          <Field label="Descripción detallada" required error={errores.descripcion} hint={descripcion === plantilla && plantilla ? `Plantilla de ${rubroNombre}: reemplaza los textos entre [corchetes] con tu información.` : `${descripcion.length} caracteres`} className="span-2"><Textarea rows={descripcion === plantilla && plantilla ? 14 : 8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Alcance, requisitos, plazos, condiciones de pago…" /></Field>
+          <Field label="Descripción detallada" required error={errores.descripcion} hint={descripcion === plantilla && plantilla ? `Plantilla de ${rubroNombre}: reemplaza los textos de ejemplo con tu información.` : `${descripcion.length} caracteres`} className="span-2"><Textarea spellCheck={false} rows={descripcion === plantilla && plantilla ? 14 : 8} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Alcance, requisitos, plazos, condiciones de pago…" /></Field>
           <Field label="Rubro" required error={errores.rubroId}>
             <Select value={rubroId} onChange={(e) => setRubroId(Number(e.target.value))}><option value={0}>Selecciona rubro</option>{cat.rubros.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}</Select>
           </Field>

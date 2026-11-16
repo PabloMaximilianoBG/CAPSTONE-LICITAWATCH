@@ -127,7 +127,7 @@ public class LicitacionService {
 
     // ---------- licitaciones ----------
     /** Días mínimos entre la publicación y el cierre, para que las Pymes alcancen a preparar su postulación. */
-    static final int PLAZO_MINIMO_DIAS = 7;
+    static final int PLAZO_MINIMO_DIAS = 5;
 
     public LicitacionDto crear(long licitadorId, NuevaLicitacion d) {
         LocalDate cierre = d.fechaCierre().atZone(ZoneId.systemDefault()).toLocalDate();
