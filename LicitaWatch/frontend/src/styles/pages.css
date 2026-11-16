@@ -286,3 +286,15 @@ td.row-actions { display: table-cell; text-align: right; white-space: nowrap; } 
 .dash-accesos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dash-acceso { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 8px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 13px; font-weight: 600; text-align: center; text-decoration: none; }
 .dash-acceso svg { color: var(--accent); } .dash-acceso:hover { border-color: var(--accent); background: var(--accent-soft); }
+.dash-acceso { position: relative; } .dash-candado { position: absolute; top: 8px; right: 8px; color: var(--muted) !important; }
+/* Recomendadas del panel de la Pyme: hasta 3 en una fila que se reparten el ancho (sin huecos si hay menos). */
+.dash-recomendadas { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+
+/* ---------- Detalle de licitación para la Pyme: orden y diferencias por plan ---------- */
+.tdp-fila > .card { height: 100%; }
+.tdp-fila { align-items: stretch; } .tdp-fila .tdp-mapa { flex-direction: column; align-items: center; gap: 14px; }
+.tdp-premium { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
+.tdp-premium svg { flex: none; margin-top: 2px; } .tdp-premium a { color: var(--accent); font-weight: 700; white-space: nowrap; }
+.tdp-competencia { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tdp-competencia + .progress { margin: 4px 0 2px; }
+.tdp-destacada { display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 10px; background: var(--teal-soft); color: #0f766e; font-size: 13px; font-weight: 600; }
